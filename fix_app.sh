@@ -194,7 +194,32 @@ fi
 PYTHON_RUNTIME_SOURCE_DIR="python_runtime"
 if [ -d "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" ]; then
     echo "Pythonランタイムを同梱しています..."
+    # Versions/Current シンボリックリンクのチェックと作成
+    if [ ! -L "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/Current" ]; then
+        echo "Versions/Current シンボリックリンクを作成します..."
+        # 最新バージョンを検出 (通常は一つのみ)
+        LATEST_VERSION=$(ls -1 "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+        if [ -z "$LATEST_VERSION" ]; then
+            # もしバージョン番号のディレクトリがなければディレクトリ名を直接使用
+            LATEST_VERSION=$(ls -1 "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" | grep -v "Current" | head -n 1)
+        fi
+        if [ -n "$LATEST_VERSION" ]; then
+            echo "Python バージョン $LATEST_VERSION を使用します"
+            (cd "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" && ln -sf "$LATEST_VERSION" Current)
+        else
+            echo "${RED}警告: Python.framework の有効なバージョンディレクトリが見つかりません。${NC}"
+        fi
+    fi
+    
+    # Python.framework を正しくコピー
     cp -R "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" "$FRAMEWORKS_DIR/"
+    
+    # 実行可能ファイルの権限を確認
+    if [ -f "$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3" ]; then
+        chmod +x "$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
+        echo "python3 実行ファイルの権限を設定しました"
+    fi
+    
     echo "Pythonランタイムの同梱が完了しました。"
 else
     echo "${RED}警告: Pythonランタイムディレクトリ ($PYTHON_RUNTIME_SOURCE_DIR/Python.framework) が見つかりません。ランタイムの同梱をスキップします。${NC}"
@@ -204,10 +229,34 @@ fi
 # 起動スクリプトを作成（シンプル版）
 cat > "$MACOS_DIR/run" << 'EOF_RUN'
 #!/bin/bash
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# --- アーキテクチャチェックと再実行 ---
+if [[ "$(arch)" != "arm64" ]]; then
+  # arm64でなければ、arm64を指定してスクリプト自身を再実行
+  echo "アーキテクチャ $(arch) を検出しました。arm64で再実行します..." >&2 # エラー出力へ
+  exec arch -arm64 "$0" "$@"
+  # exec はプロセスを置き換えるため、ここから下は再実行されたarm64プロセスでのみ実行される
+fi
+echo "arm64アーキテクチャで実行中..." >&2 # 確認用ログ
+
+# --- ログ設定 ---
+# スクリプト自身の絶対パスを取得し、そのディレクトリを SCRIPT_DIR とする
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CONTENTS_DIR="$SCRIPT_DIR/.."
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+LOG_DIR="$RESOURCES_DIR/logs"
+LAUNCHER_LOG_FILE="$LOG_DIR/launcher.log"
+mkdir -p "$LOG_DIR"
+exec > >(tee -a "$LAUNCHER_LOG_FILE") 2>&1
+echo "--- ランチャースクリプト開始: $(date) ---"
+echo "実行アーキテクチャ: $(arch)"
+# --- 変数定義 ---
+# SCRIPT_DIR以下は元のコードにもあるので、重複定義を避けるためコメントアウト
+# SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# CONTENTS_DIR="$SCRIPT_DIR/.."
+# RESOURCES_DIR="$CONTENTS_DIR/Resources"
+# FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
 SETUP_DONE_FLAG="$HOME/Library/Application Support/ankenNaviCHO/.setup_done"
 PYTHON_EXEC="$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
@@ -220,18 +269,20 @@ if [ ! -x "$PYTHON_EXEC" ]; then
         exit 1
     fi
 fi
+echo "使用するPython: $PYTHON_EXEC"
 
 # エラーハンドリング関数
 handle_error() {
     ERROR_MESSAGE=$1
-    /usr/bin/osascript -e "display dialog \"エラーが発生しました:\n\n$ERROR_MESSAGE\n\n詳細はログファイルを確認してください。\n$RESOURCES_DIR/logs/launcher.log\" buttons {\"OK\"} default button \"OK\" with title \"エラー\" with icon stop"
+    # launcher.logへのパスを修正
+    /usr/bin/osascript -e "display dialog \"エラーが発生しました:\\n\\n$ERROR_MESSAGE\\n\\n詳細はログファイルを確認してください。\\n$LAUNCHER_LOG_FILE\" buttons {\"OK\"} default button \"OK\" with title \"エラー\" with icon stop"
     exit 1
 }
 
 # セットアップ済みかチェック
 if [ ! -f "$SETUP_DONE_FLAG" ]; then
   RESULT=$(/usr/bin/osascript <<EOF_DIALOG
-    display dialog "初回セットアップが必要です。実行しますか？\n\n(Python環境の構築と依存パッケージのインストールを行います)" buttons {"キャンセル", "実行"} default button "実行" with title "ankenNaviCHO セットアップ"
+    display dialog "初回セットアップが必要です。実行しますか？" buttons {"キャンセル", "実行して通知を待つ"} default button "実行して通知を待つ" with title "ankenNaviCHO セットアップ"
 EOF_DIALOG
   )
 
@@ -264,7 +315,8 @@ EOF_RUN
 # セットアップスクリプトを作成
 cat > "$MACOS_DIR/setup" << 'EOF_SETUP'
 #!/bin/bash
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# スクリプト自身の絶対パスを取得し、そのディレクトリを SCRIPT_DIR とする
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CONTENTS_DIR="$SCRIPT_DIR/.."
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
@@ -279,6 +331,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "セットアップを開始します: $(date)"
+echo "実行アーキテクチャ: $(arch)"
 
 # 同梱Pythonが存在しない場合はシステムのPython3を使用
 if [ ! -x "$PYTHON_EXEC" ]; then
@@ -286,17 +339,19 @@ if [ ! -x "$PYTHON_EXEC" ]; then
     PYTHON_EXEC=$(which python3)
     if [ -z "$PYTHON_EXEC" ]; then
         echo "エラー: Python3が見つかりません。"
-        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\n\nPython 3.8以上をインストールしてください。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
+        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\\n\\nPython 3.8以上をインストールしてください。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
         exit 1
     fi
     echo "システムのPython3を使用します: $PYTHON_EXEC"
 fi
+echo "使用するPython: $PYTHON_EXEC"
 
 # エラーハンドリング関数
 handle_error() {
     ERROR_MESSAGE=$1
     echo "エラー発生: $ERROR_MESSAGE"
-    /usr/bin/osascript -e "display dialog \"セットアップ中にエラーが発生しました:\n\n$ERROR_MESSAGE\n\n詳細はログファイルを確認してください:\n$LOG_FILE\" buttons {\"OK\"} default button \"OK\" with title \"セットアップエラー\" with icon stop"
+    # LOG_FILE変数が既に定義されているので、それを使う
+    /usr/bin/osascript -e "display dialog \"セットアップ中にエラーが発生しました:\\n\\n$ERROR_MESSAGE\\n\\n詳細はログファイルを確認してください:\\n$LOG_FILE\" buttons {\"OK\"} default button \"OK\" with title \"セットアップエラー\" with icon stop"
     exit 1
 }
 
@@ -308,14 +363,14 @@ rm -rf "$VENV_DIR" || echo "既存の仮想環境の削除に失敗しました�
 echo "アプリケーションサポートディレクトリを作成しています: $SUPPORT_DIR"
 mkdir -p "$SUPPORT_DIR"
 if [ $? -ne 0 ]; then
-  handle_error "サポートディレクトリの作成に失敗しました。\n'$SUPPORT_DIR'\n権限を確認してください。"
+  handle_error "サポートディレクトリの作成に失敗しました。\\n'$SUPPORT_DIR'\\n権限を確認してください。"
 fi
 
 # 仮想環境を作成
 echo "仮想環境を作成しています: $VENV_DIR (使用するPython: $PYTHON_EXEC)"
 "$PYTHON_EXEC" -m venv "$VENV_DIR"
 if [ $? -ne 0 ]; then
-  handle_error "仮想環境の作成に失敗しました。\nPythonが正しくインストールされているか、またはvenvモジュールが利用可能か確認してください。"
+  handle_error "仮想環境の作成に失敗しました。\\nPythonが正しくインストールされているか、またはvenvモジュールが利用可能か確認してください。"
 fi
 
 # pipのアップグレードと依存関係のインストール
@@ -332,9 +387,9 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "依存関係をインストールしています ($RESOURCES_DIR/requirements.txt)..."
-"$VENV_DIR/bin/pip" install -r "$RESOURCES_DIR/requirements.txt"
+"$VENV_DIR/bin/pip" install --only-binary :all: -r "$RESOURCES_DIR/requirements.txt"
 if [ $? -ne 0 ]; then
-  handle_error "依存関係のインストールに失敗しました。\nrequirements.txtの内容、またはインターネット接続を確認してください。"
+  handle_error "依存関係のインストールに失敗しました。\\nrequirements.txtの内容、またはインターネット接続を確認してください。"
 fi
 
 echo "仮想環境のセットアップが完了しました。"
@@ -344,7 +399,7 @@ if [ -f "$RESOURCES_DIR/.env" ]; then
   echo ".envファイルを確認しています..."
   if ! grep -q "API_KEY" "$RESOURCES_DIR/.env" || ! grep -q "SUPABASE_URL" "$RESOURCES_DIR/.env"; then
     echo "警告: .envファイルの内容が不完全または存在しません。"
-    /usr/bin/osascript -e 'display dialog ".envファイルの内容が不完全です。\nアプリケーションの動作に必要なAPIキーなどが設定されていない可能性があります。\n\n続行しますが、設定を確認してください。" buttons {"OK"} default button "OK" with icon caution with title "警告"'
+    /usr/bin/osascript -e 'display dialog ".envファイルの内容が不完全です。\\nアプリケーションの動作に必要なAPIキーなどが設定されていない可能性があります。\\n\\n続行しますが、設定を確認してください。" buttons {"OK"} default button "OK" with icon caution with title "警告"'
   fi
 
   # PORT環境変数を.envファイルに設定
@@ -404,7 +459,8 @@ def get_chrome_version():
             chrome_path = os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
         
         if os.path.exists(chrome_path):
-            version = subprocess.check_output([chrome_path, "--version"], stderr=subprocess.STDOUT)
+            # archコマンド削除
+            version = subprocess.check_output([chrome_path, '--version'], stderr=subprocess.STDOUT)
             match = re.search(r"Google Chrome ([\d.]+)", version.decode("utf-8"))
             if match:
                 return match.group(1)
@@ -433,10 +489,10 @@ try:
     # セットアップ後の情報をファイルに保存（Chromeバージョン含む）
     cache_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".chromedriver_cache_info")
     with open(cache_info_path, "w") as f:
-        f.write(f"PATH={driver_path}\n")
-        f.write(f"TIMESTAMP={int(time.time())}\n")
+        f.write(f"PATH={driver_path}\\n")
+        f.write(f"TIMESTAMP={int(time.time())}\\n")
         if chrome_version:
-            f.write(f"CHROME_VERSION={chrome_version}\n")
+            f.write(f"CHROME_VERSION={chrome_version}\\n")
     
 except Exception as e:
     print(f"ChromeDriverのキャッシュ中にエラーが発生しました: {e}")
@@ -498,6 +554,11 @@ cat > "$CONTENTS_DIR/Info.plist" << EOF_PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>arm64</string>
+        <string>x86_64</string>
+    </array>
     <key>CFBundleExecutable</key>
     <string>run</string>
     <key>CFBundleIconFile</key>
