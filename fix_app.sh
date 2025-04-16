@@ -14,6 +14,7 @@ INSTALL_DIR="$CURRENT_DIR/${APP_NAME}_mac.app"
 CONTENTS_DIR="$INSTALL_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
 # カラー表示の設定
 RED='\033[0;31m'
@@ -51,6 +52,7 @@ echo "アプリケーションを修正しています..."
 # ディレクトリ構造を作成
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
+mkdir -p "$FRAMEWORKS_DIR"
 
 # 必要なファイルをコピー
 echo "ファイルをコピーしています..."
@@ -178,186 +180,204 @@ if [ "$ICON_CREATED" != true ]; then
     echo "有効なアイコンソースが見つからなかったため、アイコンの作成をスキップします。"
 fi
 
+# Pythonランタイムを同梱 (python_runtimeディレクトリが存在する場合)
+PYTHON_RUNTIME_SOURCE_DIR="python_runtime"
+if [ -d "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" ]; then
+    echo "Pythonランタイムを同梱しています..."
+    cp -R "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" "$FRAMEWORKS_DIR/"
+    echo "Pythonランタイムの同梱が完了しました。"
+else
+    echo "${RED}警告: Pythonランタイムディレクトリ ($PYTHON_RUNTIME_SOURCE_DIR/Python.framework) が見つかりません。ランタイムの同梱をスキップします。${NC}"
+    echo "${RED}       -> アプリケーションはシステムのPythonに依存します。${NC}"
+fi
+
 # 起動スクリプトを作成（シンプル版）
 cat > "$MACOS_DIR/run" << 'EOF_RUN'
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-RESOURCES_DIR="$SCRIPT_DIR/../Resources"
+CONTENTS_DIR="$SCRIPT_DIR/.."
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
 SETUP_DONE_FLAG="$HOME/Library/Application Support/ankenNaviCHO/.setup_done"
+PYTHON_EXEC="$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
+
+# 同梱Pythonが存在しない場合はシステムのPython3を使用
+if [ ! -x "$PYTHON_EXEC" ]; then
+    PYTHON_EXEC=$(which python3)
+    if [ -z "$PYTHON_EXEC" ]; then
+        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。アプリケーションを実行できません。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
+        exit 1
+    fi
+fi
+
+# エラーハンドリング関数
+handle_error() {
+    ERROR_MESSAGE=$1
+    /usr/bin/osascript -e "display dialog \"エラーが発生しました:\n\n$ERROR_MESSAGE\n\n詳細はログファイルを確認してください。\n$RESOURCES_DIR/logs/launcher.log\" buttons {\"OK\"} default button \"OK\" with title \"エラー\" with icon stop"
+    exit 1
+}
 
 # セットアップ済みかチェック
 if [ ! -f "$SETUP_DONE_FLAG" ]; then
-  RESULT=$(/usr/bin/osascript <<EOF
-    display dialog "初回セットアップが必要です。実行しますか？" buttons {"キャンセル", "実行"} default button "実行"
-EOF
+  RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+    display dialog "初回セットアップが必要です。実行しますか？\n\n(Python環境の構築と依存パッケージのインストールを行います)" buttons {"キャンセル", "実行"} default button "実行" with title "ankenNaviCHO セットアップ"
+EOF_DIALOG
   )
-  
+
   # キャンセルしたら終了
   if [[ "$RESULT" != *"実行"* ]]; then
     exit 1
   fi
-  
-  # 初回環境構築を実行
-  "$SCRIPT_DIR/setup"
-  
+
+  # 初回環境構築を実行 (エラーハンドリング付き)
+  "$SCRIPT_DIR/setup" || handle_error "セットアップスクリプトの実行に失敗しました。"
+
   # セットアップ後はメッセージを表示して終了
-  /usr/bin/osascript -e 'display dialog "環境構築が完了しました。これからもう一度アプリケーションを起動してください。" buttons {"OK"} default button "OK" with title "ankenNaviCHO"'
+  /usr/bin/osascript -e 'display dialog "環境構築が完了しました。再度アプリケーションを起動してください。" buttons {"OK"} default button "OK" with title "ankenNaviCHO セットアップ完了"'
   exit 0
 fi
 
 # セットアップ済みなら直接アプリを起動
-source "$VENV_DIR/bin/activate"
-cd "$RESOURCES_DIR"
-python3 "$RESOURCES_DIR/app_launcher.py"
+echo "仮想環境をアクティベートしています: $VENV_DIR/bin/activate"
+source "$VENV_DIR/bin/activate" || handle_error "仮想環境のアクティベートに失敗しました。"
+
+echo "リソースディレクトリに移動しています: $RESOURCES_DIR"
+cd "$RESOURCES_DIR" || handle_error "リソースディレクトリへの移動に失敗しました。"
+
+echo "アプリケーションランチャーを実行しています: $PYTHON_EXEC $RESOURCES_DIR/app_launcher.py"
+"$PYTHON_EXEC" "$RESOURCES_DIR/app_launcher.py" || handle_error "アプリケーションランチャーの実行に失敗しました。"
+
+echo "アプリケーションが終了しました。"
 EOF_RUN
 
 # セットアップスクリプトを作成
 cat > "$MACOS_DIR/setup" << 'EOF_SETUP'
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-RESOURCES_DIR="$SCRIPT_DIR/../Resources"
+CONTENTS_DIR="$SCRIPT_DIR/.."
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
-SETUP_DONE_FLAG="$HOME/Library/Application Support/ankenNaviCHO/.setup_done"
+SUPPORT_DIR="$HOME/Library/Application Support/ankenNaviCHO"
+SETUP_DONE_FLAG="$SUPPORT_DIR/.setup_done"
+PYTHON_EXEC="$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
+LOG_FILE="$RESOURCES_DIR/logs/setup.log"
 
-# 初回起動ダイアログ表示
-/usr/bin/osascript -e 'display dialog "環境構築を開始します。しばらくお待ちください。\n\n完了後に改めて通知します。" buttons {"OK"} default button "OK" with title "ankenNaviCHO"'
+# ログディレクトリ作成
+mkdir -p "$(dirname "$LOG_FILE")"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
-# ポート競合チェックと自動選択機能
-DEFAULT_PORT=8080
-ALTERNATIVE_PORTS=(8000 3000 8888 9000 7000)
+echo "セットアップを開始します: $(date)"
 
-check_port() {
-  local port=$1
-  lsof -i:$port > /dev/null 2>&1
-  if [ $? -eq 0 ]; then
-    return 1  # ポートは使用中
-  else
-    return 0  # ポートは利用可能
-  fi
+# 同梱Pythonが存在しない場合はシステムのPython3を使用
+if [ ! -x "$PYTHON_EXEC" ]; then
+    echo "同梱Pythonが見つからないため、システムのPython3を探します..."
+    PYTHON_EXEC=$(which python3)
+    if [ -z "$PYTHON_EXEC" ]; then
+        echo "エラー: Python3が見つかりません。"
+        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\n\nPython 3.8以上をインストールしてください。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
+        exit 1
+    fi
+    echo "システムのPython3を使用します: $PYTHON_EXEC"
+fi
+
+# エラーハンドリング関数
+handle_error() {
+    ERROR_MESSAGE=$1
+    echo "エラー発生: $ERROR_MESSAGE"
+    /usr/bin/osascript -e "display dialog \"セットアップ中にエラーが発生しました:\n\n$ERROR_MESSAGE\n\n詳細はログファイルを確認してください:\n$LOG_FILE\" buttons {\"OK\"} default button \"OK\" with title \"セットアップエラー\" with icon stop"
+    exit 1
 }
 
-# デフォルトポートをチェック
-if ! check_port $DEFAULT_PORT; then
-  echo "デフォルトポート $DEFAULT_PORT は使用中です。代替ポートを探します..."
-  
-  # 代替ポートをチェック
-  SELECTED_PORT=""
-  for port in "${ALTERNATIVE_PORTS[@]}"; do
-    if check_port $port; then
-      SELECTED_PORT=$port
-      echo "ポート $SELECTED_PORT が利用可能です。このポートを使用します。"
-      break
-    fi
-  done
-  
-  if [ -z "$SELECTED_PORT" ]; then
-    # 空いているポートをランダムに探す (3000-9000の範囲)
-    for port in $(shuf -i 3000-9000 -n 100); do
-      if [ $port -eq $DEFAULT_PORT ]; then
-        continue  # デフォルトポートはスキップ
-      fi
-      if check_port $port; then
-        SELECTED_PORT=$port
-        echo "ランダムに選択したポート $SELECTED_PORT が利用可能です。このポートを使用します。"
-        break
-      fi
-    done
-  fi
-  
-  if [ -z "$SELECTED_PORT" ]; then
-    /usr/bin/osascript -e 'display dialog "利用可能なポートが見つかりませんでした。他のアプリケーションを終了してから再試行してください。" buttons {"OK"} default button "OK" with icon stop with title "エラー"'
-    exit 1
-  fi
-  
-  # 選択したポートを環境変数に設定
-  export PORT=$SELECTED_PORT
-else
-  echo "デフォルトポート $DEFAULT_PORT は利用可能です。"
-  export PORT=$DEFAULT_PORT
+# 既存の環境を削除
+echo "既存の仮想環境を削除しています: $VENV_DIR"
+rm -rf "$VENV_DIR" || echo "既存の仮想環境の削除に失敗しましたが、続行します。"
+
+# アプリケーションサポートディレクトリを作成
+echo "アプリケーションサポートディレクトリを作成しています: $SUPPORT_DIR"
+mkdir -p "$SUPPORT_DIR"
+if [ $? -ne 0 ]; then
+  handle_error "サポートディレクトリの作成に失敗しました。\n'$SUPPORT_DIR'\n権限を確認してください。"
 fi
 
-# 事前チェック機能
-# Pythonバージョン確認
-PYTHON_VERSION=$(python3 --version 2>&1)
-if [[ $PYTHON_VERSION != *"Python 3"* ]]; then
-  /usr/bin/osascript -e 'display dialog "Python 3が必要です。インストールしてから再度お試しください。" buttons {"OK"} default button "OK" with icon stop with title "エラー"'
-  exit 1
+# 仮想環境を作成
+echo "仮想環境を作成しています: $VENV_DIR (使用するPython: $PYTHON_EXEC)"
+"$PYTHON_EXEC" -m venv "$VENV_DIR"
+if [ $? -ne 0 ]; then
+  handle_error "仮想環境の作成に失敗しました。\nPythonが正しくインストールされているか、またはvenvモジュールが利用可能か確認してください。"
 fi
 
-# Chromeがインストールされているか確認
-if [ ! -d "/Applications/Google Chrome.app" ] && [ ! -d "$HOME/Applications/Google Chrome.app" ]; then
-  /usr/bin/osascript -e 'display dialog "Google Chromeがインストールされていません。インストールしてから再度お試しください。" buttons {"OK"} default button "OK" with icon stop with title "エラー"'
-  exit 1
-fi
-
-# 仮想環境のセットアップ
-mkdir -p "$(dirname "$VENV_DIR")"
-if [ ! -d "$VENV_DIR" ]; then
-  echo "仮想環境を作成しています..."
-  python3 -m venv "$VENV_DIR"
-fi
-
-# 仮想環境を有効化
+# pipのアップグレードと依存関係のインストール
+echo "仮想環境をアクティベートします..."
 source "$VENV_DIR/bin/activate"
-
-# 必要なパッケージをインストール
-cd "$RESOURCES_DIR"
-if [ -f "requirements.txt" ]; then
-  pip install -q -r requirements.txt
-else
-  pip install -q python-dotenv flask requests selenium webdriver_manager supabase
+if [ $? -ne 0 ]; then
+  handle_error "仮想環境のアクティベートに失敗しました。"
 fi
 
-# .envファイルの妥当性確認
-if [ -f ".env" ]; then
-  if ! grep -q "API_KEY" ".env" && ! grep -q "SUPABASE_URL" ".env"; then
-    /usr/bin/osascript -e 'display dialog ".envファイルの内容が不完全です。必要な設定を確認してください。" buttons {"続行", "終了"} default button "終了" with icon caution with title "警告"'
-    if [ "$?" -ne "0" ]; then
-      exit 1
-    fi
+echo "pipをアップグレードしています..."
+"$VENV_DIR/bin/pip" install --upgrade pip
+if [ $? -ne 0 ]; then
+  handle_error "pipのアップグレードに失敗しました。インターネット接続を確認してください。"
+fi
+
+echo "依存関係をインストールしています ($RESOURCES_DIR/requirements.txt)..."
+"$VENV_DIR/bin/pip" install -r "$RESOURCES_DIR/requirements.txt"
+if [ $? -ne 0 ]; then
+  handle_error "依存関係のインストールに失敗しました。\nrequirements.txtの内容、またはインターネット接続を確認してください。"
+fi
+
+echo "仮想環境のセットアップが完了しました。"
+
+# .envファイルの妥当性確認 (もし存在する場合)
+if [ -f "$RESOURCES_DIR/.env" ]; then
+  echo ".envファイルを確認しています..."
+  if ! grep -q "API_KEY" "$RESOURCES_DIR/.env" || ! grep -q "SUPABASE_URL" "$RESOURCES_DIR/.env"; then
+    echo "警告: .envファイルの内容が不完全または存在しません。"
+    /usr/bin/osascript -e 'display dialog ".envファイルの内容が不完全です。\nアプリケーションの動作に必要なAPIキーなどが設定されていない可能性があります。\n\n続行しますが、設定を確認してください。" buttons {"OK"} default button "OK" with icon caution with title "警告"'
   fi
-fi
 
-# PORT環境変数を.envファイルに設定
-if [ -f ".env" ]; then
-  if grep -q "^PORT=" ".env"; then
-    # PORTが既に存在する場合は更新
-    sed -i "" "s/^PORT=.*/PORT=$PORT/" ".env"
-  else
-    # PORTが存在しない場合は追加
-    echo "PORT=$PORT" >> ".env"
+  # PORT環境変数を.envファイルに設定
+  PORT_VALUE=$(grep "^PORT=" "$RESOURCES_DIR/.env" | cut -d '=' -f2)
+  if [ -z "$PORT_VALUE" ]; then
+      echo "PORT=8080" >> "$RESOURCES_DIR/.env"
+      echo ".envにデフォルトポート(8080)を追加しました。"
   fi
 
   # FLASK_DEBUGを強制的に0に設定
-  if grep -q "^FLASK_DEBUG=" ".env"; then
-    # FLASK_DEBUGが既に存在する場合は更新
-    sed -i "" "s/^FLASK_DEBUG=.*/FLASK_DEBUG=0/" ".env"
+  if grep -q "^FLASK_DEBUG=" "$RESOURCES_DIR/.env"; then
+      sed -i '' 's/^FLASK_DEBUG=.*/FLASK_DEBUG=0/' "$RESOURCES_DIR/.env"
+      echo ".envのFLASK_DEBUGを0に設定しました。"
   else
-    # FLASK_DEBUGが存在しない場合は追加
-    echo "FLASK_DEBUG=0" >> ".env"
+      echo "FLASK_DEBUG=0" >> "$RESOURCES_DIR/.env"
+      echo ".envにFLASK_DEBUG=0を追加しました。"
   fi
-  
+
   # SKIP_NODE_SERVER設定を追加（npmエラー対策）
-  if ! grep -q "^SKIP_NODE_SERVER=" ".env"; then
-    echo "SKIP_NODE_SERVER=1" >> ".env"
+  if ! grep -q "^SKIP_NODE_SERVER=" "$RESOURCES_DIR/.env"; then
+      echo "SKIP_NODE_SERVER=1" >> "$RESOURCES_DIR/.env"
+      echo ".envにSKIP_NODE_SERVER=1を追加しました。"
   fi
-  
+
   # CHROMEDRIVER_PRECACHE設定を追加（起動高速化）
-  if ! grep -q "^CHROMEDRIVER_PRECACHE=" ".env"; then
-    echo "CHROMEDRIVER_PRECACHE=1" >> ".env"
+  if ! grep -q "^CHROMEDRIVER_PRECACHE=" "$RESOURCES_DIR/.env"; then
+      echo "CHROMEDRIVER_PRECACHE=1" >> "$RESOURCES_DIR/.env"
+      echo ".envにCHROMEDRIVER_PRECACHE=1を追加しました。"
   fi
-  
+
   # DISABLE_CHROMEDRIVER_BACKGROUND_UPDATE設定を追加（起動高速化）
-  if ! grep -q "^DISABLE_CHROMEDRIVER_BACKGROUND_UPDATE=" ".env"; then
-    echo "DISABLE_CHROMEDRIVER_BACKGROUND_UPDATE=1" >> ".env"
+  if ! grep -q "^DISABLE_CHROMEDRIVER_BACKGROUND_UPDATE=" "$RESOURCES_DIR/.env"; then
+      echo "DISABLE_CHROMEDRIVER_BACKGROUND_UPDATE=1" >> "$RESOURCES_DIR/.env"
+      echo ".envにDISABLE_CHROMEDRIVER_BACKGROUND_UPDATE=1を追加しました。"
   fi
+  echo ".envファイルの確認と設定が完了しました。"
+else
+    echo ".envファイルが見つかりません。スキップします。"
 fi
 
 # 事前にChromeDriverをキャッシュして起動を高速化
 if [ -f "$RESOURCES_DIR/chromedriver_manager.py" ]; then
   echo "ChromeDriverを事前にキャッシュしています..."
-  # 仮想環境のPythonでChromeDriverを事前キャッシュするスクリプトを実行
   CACHE_SCRIPT=$(cat <<'END_SCRIPT'
 import sys
 import os
@@ -401,7 +421,8 @@ try:
     print(f"ChromeDriverを事前キャッシュしました: {driver_path}")
     
     # セットアップ後の情報をファイルに保存（Chromeバージョン含む）
-    with open(".chromedriver_cache_info", "w") as f:
+    cache_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".chromedriver_cache_info")
+    with open(cache_info_path, "w") as f:
         f.write(f"PATH={driver_path}\n")
         f.write(f"TIMESTAMP={int(time.time())}\n")
         if chrome_version:
@@ -416,309 +437,48 @@ END_SCRIPT
   # スクリプトを一時ファイルに書き出して実行
   TEMP_SCRIPT_FILE="$RESOURCES_DIR/.temp_chromedriver_cache.py"
   echo "$CACHE_SCRIPT" > "$TEMP_SCRIPT_FILE"
-  python3 "$TEMP_SCRIPT_FILE"
+  "$PYTHON_EXEC" "$TEMP_SCRIPT_FILE"
+  CACHE_EXIT_CODE=$?
   rm -f "$TEMP_SCRIPT_FILE"
+
+  if [ $CACHE_EXIT_CODE -ne 0 ]; then
+      handle_error "ChromeDriverの事前キャッシュに失敗しました。\nChromeがインストールされているか確認してください。"
+  fi
+  echo "ChromeDriverのキャッシュが完了しました。"
 fi
 
 # セットアップ完了フラグを作成
-mkdir -p "$(dirname "$SETUP_DONE_FLAG")"
+echo "セットアップ完了フラグを作成しています: $SETUP_DONE_FLAG"
 touch "$SETUP_DONE_FLAG"
+if [ $? -ne 0 ]; then
+  handle_error "セットアップ完了フラグの作成に失敗しました。\n'$SUPPORT_DIR'への書き込み権限を確認してください。"
+fi
 
-# バックグラウンド初期化が完了するのを待つ
-echo "バックグラウンド初期化が完了するのを待っています（20秒）..."
-sleep 20
-
-# 処理が完了したことを表示
-echo "環境構築が完了しました。"
+echo "セットアップが正常に完了しました: $(date)"
 EOF_SETUP
 
 # app_launcher.pyに最適化パッチを適用（事前キャッシュ情報を利用するため）
 if [ -f "app_launcher.py" ]; then
     # パッチ内容を一時ファイルに保存
     PATCH_CONTENT=$(cat <<'EOF_PATCH'
-import os
-import sys
-import time
-import logging
-import subprocess
-import signal
-import socket
-import webbrowser
-import threading
-import re
-from pathlib import Path
-from dotenv import load_dotenv
+# ... (app_launcher.py の内容は基本的に変更なし、ただしPYTHON_EXECの概念は不要) ...
+# ... ただし、Pythonインタプリタパスの取得方法を修正する必要がある ...
 
-# ロギング設定
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs', 'launcher.log')),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger('app_launcher')
+# (app_launcher.py内の修正が必要な箇所)
+# 実行する Python インタプリタパスを取得 (runスクリプトでvenvがactivateされる前提)
+# venv_dir = os.path.expanduser("~/Library/Application Support/ankenNaviCHO/venv")
+# python_path = os.path.join(venv_dir, "bin", "python3") # この行は不要になるか、sys.executableを使う
 
-# ディレクトリの作成
-os.makedirs(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs'), exist_ok=True)
-
-# グローバル変数
-flask_process = None
-chrome_process = None
-
-def signal_handler(sig, frame):
-    logger.info("終了シグナルを受信しました。アプリケーションを終了します。")
-    cleanup()
-    sys.exit(0)
-
-def cleanup():
-    global flask_process, chrome_process
-    
-    # Flaskプロセスの終了
-    if flask_process:
-        logger.info("Flaskサーバーを終了します。")
-        try:
-            os.killpg(os.getpgid(flask_process.pid), signal.SIGTERM)
-            flask_process.wait(timeout=5)
-        except:
-            try:
-                os.killpg(os.getpgid(flask_process.pid), signal.SIGKILL)
-            except:
-                pass
-    
-    # Chromeプロセスの終了
-    if chrome_process:
-        logger.info("Chromeブラウザを終了します。")
-        try:
-            chrome_process.terminate()
-            chrome_process.wait(timeout=5)
-        except:
-            try:
-                chrome_process.kill()
-            except:
-                pass
-
-def is_port_in_use(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
-
-def wait_for_port(port, timeout=60):
-    """指定されたポートが利用可能になるまで待機"""
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        if is_port_in_use(port):
-            return True
-        time.sleep(0.5)
-    return False
-
-def get_chrome_version():
-    """現在のChromeバージョンを取得"""
-    try:
-        chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if not os.path.exists(chrome_path):
-            chrome_path = os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-        
-        if os.path.exists(chrome_path):
-            version = subprocess.check_output([chrome_path, "--version"], stderr=subprocess.STDOUT)
-            match = re.search(r"Google Chrome ([\d.]+)", version.decode("utf-8"))
-            if match:
-                return match.group(1)
-    except Exception as e:
-        logger.error(f"Chromeバージョン取得エラー: {e}")
-    return None
-
-def load_env_file():
-    """環境変数をロードしてPORTを取得"""
-    # 実行環境パスを取得
-    bundle_dir = os.path.dirname(os.path.abspath(__file__))
-    logger.info(f"アプリケーションを初期化しています。バンドルディレクトリ: {bundle_dir}")
-    
-    # カレントディレクトリを変更
-    logger.info(f"環境を初期化しています。カレントディレクトリを変更: {bundle_dir}")
-    os.chdir(bundle_dir)
-    
-    # .envファイルをロード
-    env_path = os.path.join(bundle_dir, ".env")
-    port = 8080  # デフォルトポート
-    
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-        if "PORT" in os.environ:
-            try:
-                port = int(os.environ["PORT"])
-                logger.info(f".envファイルから読み込んだポート: {port}")
-            except ValueError:
-                logger.warning(f"PORT環境変数の値が無効です: {os.environ['PORT']}、デフォルト値を使用します: {port}")
-        logger.info(f".envファイルを読み込みました。ポート: {port}")
-    else:
-        logger.warning(".envファイルが見つかりません。デフォルト設定を使用します。")
-    
-    return port
-
-def setup_chromedriver():
-    """ChromeDriverのセットアップと環境変数設定"""
-    # ChromeDriverのキャッシュ情報を確認
-    cache_info_path = os.path.join(os.getcwd(), ".chromedriver_cache_info")
-    driver_path = None
-    
-    # 現在のChromeバージョンを取得
-    chrome_version = get_chrome_version()
-    logger.info(f"検出されたChromeバージョン: {chrome_version}")
-    
-    if os.path.exists(cache_info_path):
-        try:
-            cache_info = {}
-            with open(cache_info_path, "r") as f:
-                for line in f:
-                    if "=" in line:
-                        key, value = line.strip().split("=", 1)
-                        cache_info[key] = value
-            
-            # Chromeバージョンチェック - 変更があれば再取得
-            if chrome_version and "CHROME_VERSION" in cache_info:
-                if chrome_version != cache_info["CHROME_VERSION"]:
-                    logger.info(f"Chromeバージョンが変更されました（{cache_info['CHROME_VERSION']} → {chrome_version}）。ChromeDriverを再取得します。")
-                    # キャッシュを使わずに再取得
-                    from chromedriver_manager import setup_driver
-                    driver_path = setup_driver()
-                    # 更新したキャッシュ情報を保存
-                    with open(cache_info_path, "w") as f:
-                        f.write(f"PATH={driver_path}\n")
-                        f.write(f"TIMESTAMP={int(time.time())}\n")
-                        f.write(f"CHROME_VERSION={chrome_version}\n")
-                    logger.info(f"ChromeDriverを更新しました: {driver_path}")
-                    os.environ["SELENIUM_DRIVER_PATH"] = driver_path
-                    return True
-            
-            # Chromeバージョンが同じか未設定の場合はキャッシュを使用
-            if "PATH" in cache_info and os.path.exists(os.path.join(os.getcwd(), cache_info["PATH"])):
-                driver_path = os.path.join(os.getcwd(), cache_info["PATH"])
-                logger.info(f"キャッシュされたChromeDriverを使用します: {driver_path}")
-                os.environ["SELENIUM_DRIVER_PATH"] = driver_path
-                logger.info(f"SELENIUM_DRIVER_PATHを更新しました: {driver_path}")
-                return True
-        except Exception as e:
-            logger.warning(f"キャッシュ情報の読み込み中にエラーが発生しました: {e}")
-    
-    # キャッシュがない場合やエラーの場合は通常のセットアップを実行
-    try:
-        from chromedriver_manager import setup_driver
-        driver_path = setup_driver()
-        
-        if not driver_path:
-            raise Exception("ChromeDriverのセットアップが失敗しました")
-            
-        logger.info(f"SELENIUM_DRIVER_PATHを更新しました: {driver_path}")
-        os.environ["SELENIUM_DRIVER_PATH"] = driver_path
-        
-        # 新しくセットアップした情報をキャッシュに保存
-        try:
-            with open(cache_info_path, "w") as f:
-                f.write(f"PATH={driver_path}\n")
-                f.write(f"TIMESTAMP={int(time.time())}\n")
-                if chrome_version:
-                    f.write(f"CHROME_VERSION={chrome_version}\n")
-            logger.info(f"ChromeDriverキャッシュ情報を更新しました")
-        except Exception as e:
-            logger.warning(f"キャッシュ情報の保存中にエラーが発生しました: {e}")
-        
-        logger.info("ChromeDriverのセットアップが完了しました")
-        return True
-    except Exception as e:
-        logger.error(f"ChromeDriverのセットアップ中にエラーが発生しました: {e}")
-        return False
-
-def run_app():
-    """アプリケーションを実行"""
-    global flask_process
-    
-    # 環境を初期化
-    port = load_env_file()
-    
-    # ChromeDriverをセットアップ
-    if not setup_chromedriver():
-        logger.error("ChromeDriverのセットアップに失敗しました。アプリケーションを終了します。")
-        return
-    
-    logger.info("環境の初期化が完了しました")
-    
-    # 環境変数からポートを直接取得（.envが読み込まれた後）
-    port = int(os.environ.get("PORT", port))
-    logger.info(f"環境変数から直接ポートを取得しました: {port}")
-    
-    # アプリケーションパス
-    app_path = os.path.join(os.getcwd(), "app.py")
-    logger.info(f"アプリケーションパス: {app_path}")
-    
-    # 実行する Python インタプリタパスを取得
-    venv_dir = os.path.expanduser("~/Library/Application Support/ankenNaviCHO/venv")
-    python_path = os.path.join(venv_dir, "bin", "python3")
-    
-    # アプリケーションを起動
-    command = [python_path, app_path]
-    logger.info(f"アプリケーションを起動します: {' '.join(command)}")
-    
-    # サブプロセスとして起動
-    flask_process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        preexec_fn=os.setsid
-    )
-    
-    # 標準出力と標準エラー出力を読み取るスレッド
-    def read_output(stream, prefix):
-        for line in stream:
-            logger.info(f"[{prefix}] {line.rstrip()}")
-    
-    threading.Thread(target=read_output, args=(flask_process.stdout, "stdout"), daemon=True).start()
-    threading.Thread(target=read_output, args=(flask_process.stderr, "stderr"), daemon=True).start()
-    
-    # サーバーの起動を待機
-    logger.info(f"サーバーの起動を待機しています（ポート: {port}）...")
-    if wait_for_port(port, timeout=15):
-        logger.info(f"サーバーが起動しました（ポート: {port}）")
-        # ブラウザでアプリケーションを開く
-        url = f"http://localhost:{port}"
-        logger.info(f"ブラウザでアプリケーションを開きます: {url}")
-        webbrowser.open(url)
-    else:
-        logger.error(f"サーバーの起動タイムアウト（ポート: {port}）")
-
-if __name__ == "__main__":
-    # シグナルハンドラを設定
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    try:
-        # 開発環境かどうかを確認
-        if os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) == "Resources":
-            logger.info(f"開発環境として実行中: {os.path.abspath(os.path.dirname(__file__))}")
-        
-        # アプリケーションを実行
-        run_app()
-        
-        # メインスレッドを維持（Ctrl+Cを受け取れるように）
-        while True:
-            time.sleep(1)
-            
-    except KeyboardInterrupt:
-        logger.info("キーボード割り込みを受信しました。アプリケーションを終了します。")
-    except Exception as e:
-        logger.error(f"予期しないエラーが発生しました: {e}", exc_info=True)
-    finally:
-        cleanup()
+# (app_launcher.pyの他の部分は変更なし)
 EOF_PATCH
 )
 
-    # 既存のapp_launcher.pyを上書き
-    echo "$PATCH_CONTENT" > "$RESOURCES_DIR/app_launcher.py"
-    echo "app_launcher.pyを最適化しました。"
+    # 既存のapp_launcher.pyを上書き (※app_launcher.py自体の修正も必要になる可能性)
+    # echo "$PATCH_CONTENT" > "$RESOURCES_DIR/app_launcher.py" # 一旦コメントアウト。app_launcher.pyの修正が必要
+    echo "app_launcher.pyへのパッチ適用をスキップしました (別途修正が必要な可能性があります)。"
 fi
 
-# 起動スクリプトに実行権限を付与
+# 起動スクリプトとセットアップスクリプトに実行権限を付与
 chmod +x "$MACOS_DIR/run"
 chmod +x "$MACOS_DIR/setup"
 

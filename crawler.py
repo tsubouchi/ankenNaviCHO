@@ -21,12 +21,39 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from openai import OpenAI
 import re
 import platform
+import tkinter as tk
+from tkinter import messagebox
 
 # 自作のChromeDriver管理モジュールをインポート
 import chromedriver_manager
 
 # 設定ファイルパス用に修正モジュールをインポート
 from fix_settings_patch import get_app_paths, get_data_dir_from_env
+
+# カスタム例外クラス
+class LoginError(Exception):
+    """ログイン失敗を示す例外"""
+    pass
+
+class ScrapingError(Exception):
+    """スクレイピング失敗を示す例外"""
+    pass
+
+class FilteringError(Exception):
+    """フィルタリング処理の問題を示す例外"""
+    pass
+
+def show_error_dialog(title, message):
+    """エラーダイアログを表示する"""
+    try:
+        root = tk.Tk()
+        root.withdraw()  # メインウィンドウを表示しない
+        messagebox.showerror(title, message)
+        root.destroy()
+    except tk.TclError:
+        # GUIが利用できない環境（例: SSH接続など）
+        logger.error(f"GUIダイアログ表示不可: {title} - {message}")
+        print(f"エラー: {title}\n{message}") # コンソールに出力
 
 # 環境変数の読み込み
 load_dotenv()
@@ -186,8 +213,9 @@ def filter_jobs_by_gpt(jobs, config):
         except Exception as e:
             logger.error(f"Error in LLM filtering for job {job['title']}: {e}")
             logger.error(f"完全なエラー内容: {str(e)}")
-            # エラーの場合は安全のため、その案件を含める
-            filtered_jobs.append(job)
+            # エラーの場合は安全のため、その案件を含める -> 変更: FilteringErrorを送出
+            # filtered_jobs.append(job)
+            raise FilteringError(f"LLMフィルタリング処理中にエラーが発生しました: {e}")
     
     logger.info(f"\nLLMフィルタリング完了。{len(filtered_jobs)}/{total_jobs} 件が条件に適合")
     return filtered_jobs
@@ -218,7 +246,11 @@ def process_crawled_data(jobs, crawler=None):
     
     # GPTフィルタリングを実行
     config = load_config()
-    filtered_jobs = filter_jobs_by_gpt(jobs, config)
+    try:
+        filtered_jobs = filter_jobs_by_gpt(jobs, config)
+    except FilteringError as e:
+        logger.error(f"フィルタリング処理でエラー: {e}")
+        raise  # FilteringErrorを再度送出してメイン処理に伝える
     
     # フィルタリング済み案件の詳細情報を取得
     if crawler and filtered_jobs:
@@ -353,14 +385,16 @@ class CrowdWorksCrawler:
                     with open("error_page.html", "w", encoding="utf-8") as f:
                         f.write(self.driver.page_source)
                     logger.info("エラー時のページソースを'error_page.html'に保存しました")
-                    return False
+                    # return False
+                    raise LoginError("ログインフォームの要素が見つかりません")
                 
                 logger.info("ログインフォームの要素を発見")
 
                 # 認証情報の検証
                 if not self.email or not self.password:
                     logger.error(f"認証情報が不足しています: email={bool(self.email)}, password={bool(self.password)}")
-                    return False
+                    # return False
+                    raise LoginError("CrowdWorksのメールアドレスまたはパスワードが設定されていません")
 
                 # JavaScriptを使用して入力
                 self.driver.execute_script("""
@@ -404,7 +438,8 @@ class CrowdWorksCrawler:
                 
                 if error_messages and len(error_messages) > 0:
                     logger.error(f"ログインエラーメッセージを検出: {error_messages}")
-                    return False
+                    # return False
+                    raise LoginError(f"ログインエラーメッセージを検出: {error_messages}")
                 
                 if "/login" not in current_url:
                     logger.info("ログイン成功")
@@ -417,17 +452,20 @@ class CrowdWorksCrawler:
                         f.write(self.driver.page_source)
                     logger.info("ログイン失敗時のページソースを'login_failure_page.html'に保存しました")
                     
-                    return False
+                    # return False
+                    raise LoginError("ログインページから移動できませんでした")
             except Exception as e:
                 logger.error(f"ログインフォームの操作に失敗: {str(e)}")
                 # ページソースを保存して調査
                 with open("error_page.html", "w", encoding="utf-8") as f:
                     f.write(self.driver.page_source)
                 logger.info("エラー時のページソースを'error_page.html'に保存しました")
-                return False
+                # return False
+                raise LoginError(f"ログインフォームの操作中に予期しないエラーが発生しました: {e}")
         except Exception as e:
             logger.error(f"ログイン処理でエラー発生: {str(e)}")
-            return False
+            # return False
+            raise LoginError(f"ログイン処理中に予期しないエラーが発生しました: {e}")
 
     def random_sleep(self, min_seconds=1, max_seconds=3):
         """ランダムな待機時間を設定"""
@@ -502,6 +540,12 @@ class CrowdWorksCrawler:
                 
                 # 案件要素を取得
                 job_elements = soup.find_all('div', class_='UNzN7')
+
+                # 最初のページで案件要素が見つからない場合、エラーとする
+                if current_page == 1 and not job_elements:
+                    logger.error("案件リストの要素が見つかりません。サイト構造が変更された可能性があります。")
+                    self.save_page_source("scrape_error_page.html")
+                    raise ScrapingError("案件リストの取得に失敗しました。サイト構造の変更の可能性があります。")
                 
                 for job_element in job_elements:
                     if len(jobs_data) >= max_items:
@@ -554,14 +598,17 @@ class CrowdWorksCrawler:
                         break
                     except Exception as e:
                         self.logger.error(f"ページ遷移中にエラーが発生: {str(e)}")
-                        break
+                        self.save_page_source("scrape_error_page.html")
+                        raise ScrapingError(f"案件一覧のページ遷移中にエラーが発生しました: {e}")
             
             self.logger.info(f"合計{len(jobs_data)}件の案件を取得しました（{current_page}ページ分）")
             return jobs_data
             
         except Exception as e:
             self.logger.error(f"案件一覧の取得中にエラーが発生: {str(e)}")
-            return []
+            self.save_page_source("scrape_error_page.html")
+            # return []
+            raise ScrapingError(f"案件一覧の取得中に予期しないエラーが発生しました: {e}")
 
     def save_jobs(self, jobs: List[Dict]):
         """取得した案件情報を保存"""
@@ -683,6 +730,21 @@ if __name__ == "__main__":
         # 正常終了
         logger.info("クローラーが正常に終了しました")
         sys.exit(0)
+    except LoginError as e:
+        error_msg = f"CrowdWorksへのログイン失敗: ログインできていない可能性があります。IDとパスを確認してください。\n詳細: {str(e)}"
+        logger.error(error_msg)
+        show_error_dialog("ログインエラー", "CrowdWorksへのログインに失敗しました。\nIDとパスワードを確認してください。")
+        sys.exit(1)
+    except ScrapingError as e:
+        error_msg = f"スクレイピングの失敗: サイト構造が変更された、または案件が取得できなかった可能性があります。\n詳細: {str(e)}"
+        logger.error(error_msg)
+        show_error_dialog("スクレイピングエラー", "案件情報の取得に失敗しました。\nサイト構造が変更された可能性があります。\nバージョンアップをお待ちください。")
+        sys.exit(1)
+    except FilteringError as e:
+        error_msg = f"フィルタリング処理の問題: GPTフィルタリングでエラーが発生している可能性があります。\n詳細: {str(e)}"
+        logger.error(error_msg)
+        show_error_dialog("フィルタリングエラー", "フィルタリング処理でエラーが発生しました。\nAPIキーの設定やフィルタリング条件を確認してください。")
+        sys.exit(1)
     except Exception as e:
         # 予期しないエラーを記録
         error_msg = f"クローラー実行中に予期しないエラーが発生しました: {str(e)}"
