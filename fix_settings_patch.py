@@ -36,13 +36,17 @@ def get_app_paths():
     else:
         # 開発環境で実行されている場合
         bundle_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        data_dir = bundle_dir / 'crawled_data'
         
-        # 必要なディレクトリを作成
-        ensure_app_directories(data_dir)
+        # 開発環境ではルートディレクトリを基準としてパスを設定
+        # crawled_dataディレクトリはデータ用、他のディレクトリ（logs, drivers, backups）はルートに
+        project_root = bundle_dir
+        data_dir = project_root  # ルートディレクトリをデータディレクトリとして使用
         
-        # 設定ファイルのパス
-        settings_file = data_dir / 'settings.json'
+        # 必要なディレクトリを作成（開発環境では特別な処理）
+        ensure_dev_directories(project_root)
+        
+        # 設定ファイルのパス（crawled_dataディレクトリ内）
+        settings_file = project_root / 'crawled_data' / 'settings.json'
         
         return {
             'bundle_dir': bundle_dir,
@@ -62,9 +66,9 @@ def get_data_dir_from_env():
     # 環境変数にない場合はアプリケーションパスから取得
     return get_app_paths()['data_dir']
 
-# アプリケーションに必要なディレクトリを作成する関数
+# アプリケーションに必要なディレクトリを作成する関数（本番用）
 def ensure_app_directories(base_dir):
-    """アプリケーションに必要なディレクトリを作成"""
+    """アプリケーションに必要なディレクトリを作成（本番環境用）"""
     # ベースディレクトリを作成
     os.makedirs(base_dir, exist_ok=True)
     
@@ -72,6 +76,17 @@ def ensure_app_directories(base_dir):
     subdirs = ['logs', 'drivers', 'backups', 'crawled_data']
     for subdir in subdirs:
         os.makedirs(base_dir / subdir, exist_ok=True)
+
+# 開発環境用のディレクトリ作成関数（クローリング関連とログなどを分離）
+def ensure_dev_directories(project_root):
+    """開発環境に必要なディレクトリを作成（各ディレクトリをルートに配置）"""
+    # 基本ディレクトリ（ルート直下）
+    root_dirs = ['logs', 'drivers', 'backups']
+    for dir_name in root_dirs:
+        os.makedirs(project_root / dir_name, exist_ok=True)
+    
+    # データ用ディレクトリ（crawled_data）
+    os.makedirs(project_root / 'crawled_data', exist_ok=True)
 
 # main関数（テスト用）
 def main():
@@ -82,10 +97,23 @@ def main():
     print(f"設定ファイル: {paths['settings_file']}")
     
     # サブディレクトリの確認
-    subdirs = ['logs', 'drivers', 'backups', 'crawled_data']
-    for subdir in subdirs:
-        subdir_path = paths['data_dir'] / subdir
-        print(f"サブディレクトリ {subdir}: {'存在します' if subdir_path.exists() else '存在しません'}")
+    if getattr(sys, 'frozen', False):
+        # 本番環境の場合
+        subdirs = ['logs', 'drivers', 'backups', 'crawled_data']
+        for subdir in subdirs:
+            subdir_path = paths['data_dir'] / subdir
+            print(f"サブディレクトリ {subdir}: {'存在します' if subdir_path.exists() else '存在しません'}")
+    else:
+        # 開発環境の場合
+        root_dirs = ['logs', 'drivers', 'backups']
+        data_dir = paths['data_dir']
+        for dir_name in root_dirs:
+            dir_path = data_dir / dir_name
+            print(f"ルートディレクトリ {dir_name}: {'存在します' if dir_path.exists() else '存在しません'}")
+        
+        # crawled_dataディレクトリ
+        crawled_data_path = data_dir / 'crawled_data'
+        print(f"データディレクトリ crawled_data: {'存在します' if crawled_data_path.exists() else '存在しません'}")
 
 if __name__ == "__main__":
     main() 

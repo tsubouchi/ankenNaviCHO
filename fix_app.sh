@@ -85,7 +85,17 @@ fi
 mkdir -p "$RESOURCES_DIR/logs"
 mkdir -p "$RESOURCES_DIR/drivers"
 mkdir -p "$RESOURCES_DIR/backups"
-mkdir -p "$RESOURCES_DIR/crawled_data"
+
+# crawled_dataディレクトリの処理を改善
+if [ -d "crawled_data" ]; then
+    # crawled_dataディレクトリが存在する場合でも、中身はコピーせず空のディレクトリだけを作成
+    echo "空のcrawled_dataディレクトリを作成します..."
+    mkdir -p "$RESOURCES_DIR/crawled_data"
+    echo "crawled_dataディレクトリを作成しました（中身はコピーしません）"
+else
+    # crawled_dataディレクトリが存在しない場合も、空のディレクトリを作成
+    mkdir -p "$RESOURCES_DIR/crawled_data"
+fi
 
 # ChromeDriverをコピー
 if [ -d "drivers" ]; then
