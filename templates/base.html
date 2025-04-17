@@ -4,10 +4,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     {{ bootstrap.load_css() }}
-    <title>{% block title %}タイトル{% endblock %}</title>
+    <title>{% block title %}案件検索ツール{% endblock %}</title>
+    
+    <!-- アプリケーション終了スクリプト -->
+    <script>
+        window.addEventListener('beforeunload', () => {
+            // ブラウザが閉じられる前にサーバーシャットダウンAPIを呼び出す
+            navigator.sendBeacon('/api/shutdown');
+        });
+    </script>
+    
+    {% block styles %}{% endblock %}
   </head>
   <body>
-    {% block content %}{% endblock %}
+    {% include 'navbar.html' %}
+    
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+    
     {{ bootstrap.load_js() }}
+    {% block scripts %}{% endblock %}
   </body>
 </html> 

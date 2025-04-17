@@ -15,6 +15,7 @@ import sys
 import signal
 import threading
 import time
+import psutil
 from bulk_apply import register_bulk_apply_routes, init_bulk_apply
 from supabase import create_client, Client
 import logging
@@ -48,6 +49,97 @@ DEFAULT_SETTINGS = {
     'crowdworks_email': '',
     'crowdworks_password': ''
 }
+
+# シグナルハンドラを設定
+def signal_handler(sig, frame):
+    """シグナル受信時の処理（SIGTERM, SIGINT）"""
+    signame = {signal.SIGTERM: "SIGTERM", signal.SIGINT: "SIGINT"}.get(sig, str(sig))
+    logger.info(f"シグナル {signame} を受信しました。終了処理を開始します。")
+    
+    # リソースのクリーンアップ
+    cleanup_resources()
+    
+    # 終了
+    os._exit(0)
+
+# 既存のプロセスを強制終了する関数
+def kill_existing_process(pid):
+    """指定されたPIDのプロセスを強制終了する"""
+    try:
+        logger.info(f"既存のプロセス {pid} を終了します")
+        process = psutil.Process(pid)
+        
+        # プロセスを終了（SIGTERM）
+        process.terminate()
+        
+        # プロセスが終了するまで待機（最大5秒）
+        try:
+            process.wait(timeout=5)
+            logger.info(f"プロセス {pid} は正常に終了しました")
+            return True
+        except psutil.TimeoutExpired:
+            # タイムアウトした場合は強制終了（SIGKILL）
+            logger.warning(f"プロセス {pid} が応答しないため強制終了します")
+            process.kill()
+            return True
+    except psutil.NoSuchProcess:
+        logger.info(f"プロセス {pid} は既に終了しています")
+        return True
+    except Exception as e:
+        logger.error(f"プロセス {pid} の終了に失敗しました: {e}")
+        return False
+
+# ロックファイルに記録されたプロセスを強制終了する
+def kill_if_running(lock_file):
+    """ロックファイルに記録されたプロセスを検出し、終了させる"""
+    try:
+        if lock_file.exists():
+            logger.info(f"既存のロックファイルを検出: {lock_file}")
+            try:
+                content = lock_file.read_text().strip()
+                if content:
+                    parts = content.split(',', 1)
+                    if len(parts) > 0:
+                        try:
+                            pid = int(parts[0])
+                            logger.info(f"既存のプロセスを検出: PID={pid}")
+                            
+                            if kill_existing_process(pid):
+                                # ロックファイルを削除
+                                try:
+                                    lock_file.unlink(missing_ok=True)
+                                    logger.info(f"ロックファイルを削除しました: {lock_file}")
+                                except Exception as e:
+                                    logger.error(f"ロックファイル削除中にエラー: {str(e)}")
+                                return True
+                            else:
+                                return False
+                        except ValueError:
+                            logger.warning(f"ロックファイルから無効なPIDを検出: {parts[0]}")
+                            # 無効なPIDの場合はファイルを削除
+                            try:
+                                lock_file.unlink(missing_ok=True)
+                            except:
+                                pass
+                            return True
+                else:
+                    # 内容が空の場合
+                    try:
+                        lock_file.unlink(missing_ok=True)
+                    except:
+                        pass
+                    return True
+            except Exception as e:
+                logger.error(f"ロックファイル読み取り中にエラー: {str(e)}")
+                try:
+                    lock_file.unlink(missing_ok=True)
+                except:
+                    pass
+                return True
+        return True  # ロックファイルが存在しない場合は問題なし
+    except Exception as e:
+        logger.error(f"プロセス終了処理中にエラー: {str(e)}")
+        return False
 
 # アプリケーション環境の初期化関数
 def initialize_app_environment():
@@ -1607,16 +1699,40 @@ def stop_node_server():
     if node_process:
         try:
             logger.info(f"Nodeサーバーを終了します (PID={node_process.pid})")
-            node_process.terminate()
             
-            # 終了を確認し、必要に応じて強制終了
-            time.sleep(1)
+            # プロセスグループがある場合はグループごと終了
+            if hasattr(node_process, 'pgid') and node_process.pgid > 0:
+                try:
+                    logger.info(f"プロセスグループを終了します (PGID={node_process.pgid})")
+                    os.killpg(node_process.pgid, signal.SIGTERM)
+                    
+                    # 終了を待機（最大5秒）
+                    start_time = time.time()
+                    while time.time() - start_time < 5:
+                        if node_process.poll() is not None:
+                            logger.info(f"Nodeサーバーが正常に終了しました")
+                            break
+                        time.sleep(0.1)
+                    
+                    # 終了しない場合は強制終了
+                    if node_process.poll() is None:
+                        logger.warning(f"Nodeサーバーが応答しないため、強制終了します")
+                        os.killpg(node_process.pgid, signal.SIGKILL)
+                except Exception as e:
+                    logger.error(f"プロセスグループ終了中にエラー: {str(e)}")
+            
+            # 通常の終了処理（プロセスグループがない場合）
             if node_process.poll() is None:
-                logger.info(f"Nodeサーバーを強制終了します (PID={node_process.pid})")
-                if sys.platform == 'win32':
-                    subprocess.call(['taskkill', '/F', '/T', '/PID', str(node_process.pid)])
-                else:
-                    os.kill(node_process.pid, signal.SIGKILL)
+                node_process.terminate()
+                
+                # 終了を確認し、必要に応じて強制終了
+                time.sleep(1)
+                if node_process.poll() is None:
+                    logger.info(f"Nodeサーバーを強制終了します (PID={node_process.pid})")
+                    if sys.platform == 'win32':
+                        subprocess.call(['taskkill', '/F', '/T', '/PID', str(node_process.pid)])
+                    else:
+                        os.kill(node_process.pid, signal.SIGKILL)
             
             node_process = None
             logger.info("Nodeサーバーを終了しました")
@@ -1677,17 +1793,22 @@ def start_node_server():
         if npm_dir not in env.get('PATH', ''):
             env['PATH'] = f"{npm_dir}:{env.get('PATH', '')}"
         
-        # Nodeサーバーを起動
+        # Nodeサーバーをプロセスグループリーダーとして起動
+        # (start_new_session=Trueでプロセスグループを作成)
         node_process = subprocess.Popen(
             node_cmd,
             cwd=node_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env=env
+            env=env,
+            start_new_session=True  # プロセスグループリーダーとして起動
         )
         
-        logger.info(f"Nodeサーバーを起動しました (PID={node_process.pid})")
+        # プロセスグループIDを保存
+        node_process.pgid = os.getpgid(node_process.pid) if hasattr(os, 'getpgid') else node_process.pid
+        
+        logger.info(f"Nodeサーバーを起動しました (PID={node_process.pid}, PGID={node_process.pgid})")
     except Exception as e:
         logger.error(f"Nodeサーバーの起動に失敗: {str(e)}\n{traceback.format_exc()}")
 
@@ -1751,6 +1872,57 @@ def get_lock_file():
         data_dir = app_paths['data_dir']
         LOCK_FILE = data_dir / "anken_navi.lock"
     return LOCK_FILE
+
+def kill_if_running(lock_file):
+    """ロックファイルに記録されたプロセスを強制終了"""
+    try:
+        if lock_file.exists():
+            logger.info(f"既存のロックファイルを検出: {lock_file}")
+            try:
+                content = lock_file.read_text().strip()
+                if content:
+                    parts = content.split(',', 1)
+                    if len(parts) > 0:
+                        try:
+                            pid = int(parts[0])
+                            logger.info(f"既存のプロセスを検出: PID={pid}")
+                            
+                            if kill_existing_process(pid):
+                                # ロックファイルを削除
+                                try:
+                                    lock_file.unlink(missing_ok=True)
+                                    logger.info(f"ロックファイルを削除しました: {lock_file}")
+                                except Exception as e:
+                                    logger.error(f"ロックファイル削除中にエラー: {str(e)}")
+                                return True
+                            else:
+                                return False
+                        except ValueError:
+                            logger.warning(f"ロックファイルから無効なPIDを検出: {parts[0]}")
+                            # 無効なPIDの場合はファイルを削除
+                            try:
+                                lock_file.unlink(missing_ok=True)
+                            except:
+                                pass
+                            return True
+                else:
+                    # 内容が空の場合
+                    try:
+                        lock_file.unlink(missing_ok=True)
+                    except:
+                        pass
+                    return True
+            except Exception as e:
+                logger.error(f"ロックファイル読み取り中にエラー: {str(e)}")
+                try:
+                    lock_file.unlink(missing_ok=True)
+                except:
+                    pass
+                return True
+        return True  # ロックファイルが存在しない場合は問題なし
+    except Exception as e:
+        logger.error(f"プロセス終了処理中にエラー: {str(e)}")
+        return False
 
 def acquire_lock(lock_file):
     """ロックファイルをロック (macOS用実装)"""
@@ -1819,14 +1991,23 @@ def check_already_running(port):
         True: 既に実行中
         False: 実行中ではない
     """
-    # ポートが使用中かチェック
-    if is_port_in_use(port):
-        logger.info(f"ポート {port} は既に使用中です。アプリケーションは既に実行中です。")
-        # ブラウザは自動で開かない
-        return True
-
     # ロックファイルのパスを取得
     lock_file = get_lock_file()
+    
+    # 既存のプロセスを終了
+    if not kill_if_running(lock_file):
+        logger.error("既存プロセスの終了に失敗しました。アプリケーションを起動できません。")
+        return True
+    
+    # ポートが使用中かチェック
+    if is_port_in_use(port):
+        logger.warning(f"ポート {port} は既に使用中です。他のプロセスが使用している可能性があります。")
+        # 同一ポートをすでに使用している場合でも、強制終了した可能性があるため
+        # 少し待機してから再度チェック
+        time.sleep(2)
+        if is_port_in_use(port):
+            logger.error(f"ポート {port} は依然として使用中です。アプリケーションを起動できません。")
+            return True
     
     # ロックを取得を試行
     if acquire_lock(lock_file):
@@ -1841,48 +2022,22 @@ def check_already_running(port):
         logger.info(f"アプリケーションロックを取得しました: {lock_file}")
         return False
     else:
-        # ロック取得失敗 - 既に別のインスタンスが実行中
+        # ロック取得失敗 - ロックファイルを強制的に解放してみる
+        logger.warning("ロックファイルの取得に失敗しました。強制的に解放を試みます。")
+        release_lock()
         
-        # ロックファイルから情報を読み取り
-        try:
-            with open(lock_file, 'r') as f:
-                content = f.read().strip()
-                if content:
-                    parts = content.split(',')
-                    if len(parts) == 2:
-                        pid, existing_port = parts
-                        
-                        # PIDをチェックしてプロセスが実行中か確認
-                        try:
-                            pid = int(pid)
-                            # プロセスが存在するか確認
-                            try:
-                                os.kill(pid, 0)
-                                # プロセスが実行中の場合は既に実行中と表示するのみ
-                                logger.info(f"既存のインスタンスを検出: PID={pid}, ポート={existing_port}")
-                                return True
-                            except OSError:
-                                # プロセスが存在しない場合
-                                logger.warning(f"ロックファイルのプロセスが既に終了しています: {pid}")
-                                
-                                # ロックファイルを強制削除し、再試行
-                                try:
-                                    if lock_file.exists():
-                                        lock_file.unlink()
-                                    time.sleep(1)  # 少し待機
-                                    return check_already_running(port)  # 再試行
-                                except Exception as e:
-                                    logger.error(f"古いロックファイル削除中にエラー: {str(e)}")
-                        except (ValueError, TypeError) as e:
-                            logger.error(f"無効なPID: {str(e)}")
-        except Exception as e:
-            logger.error(f"ロックファイル読み取り中にエラー: {str(e)}")
-        
-        # ポートが使用中の場合も既に実行中と表示するのみ
-        if is_port_in_use(port):
-            logger.info(f"ポート {port} は既に使用中です。アプリケーションは既に実行中です。")
+        # 再度ロック取得を試行
+        if acquire_lock(lock_file):
+            if LOCK_FD:
+                LOCK_FD.write(f"{os.getpid()},{port}")
+                LOCK_FD.flush()
             
-        return True
+            atexit.register(release_lock)
+            logger.info(f"アプリケーションロックを強制的に取得しました: {lock_file}")
+            return False
+        else:
+            logger.error("ロックファイルの強制解放にも失敗しました。アプリケーションを起動できません。")
+            return True
 
 # ブラウザのセッション管理のための関数
 def check_and_reopen_browser(port):
@@ -1927,6 +2082,11 @@ if __name__ == "__main__":
         # ポート番号を取得
         port = int(os.environ.get('PORT', 8080))
         
+        # シグナルハンドラを登録
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        logger.info("シグナルハンドラを登録しました")
+        
         # 既に実行中かチェック
         if check_already_running(port):
             logger.info("アプリケーションは既に実行中です。終了します。")
@@ -1936,8 +2096,67 @@ if __name__ == "__main__":
         if not os.environ.get('SKIP_NODE_SERVER', False):
             start_node_server()
         
-        # サーバーを起動
-        app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', 'False').lower() == 'true')
+        # サーバーを起動（リローダーを無効化）
+        app.run(
+            host='0.0.0.0', 
+            port=port, 
+            debug=False,  # 常にFalseに設定
+            use_reloader=False  # リローダーを無効化
+        )
     except Exception as e:
         logger.error(f"アプリケーション起動エラー: {str(e)}", exc_info=True)
+        # エラー終了時にもリソースを解放
+        cleanup_resources()
         sys.exit(1)
+
+# サーバーをシャットダウンする関数
+def shutdown_server():
+    """Flask サーバーを明示的に終了する"""
+    try:
+        logger.info("サーバーのシャットダウンを開始します")
+        
+        # Nodeサーバーを停止
+        stop_node_server()
+        
+        # ロックファイルを解放
+        release_lock()
+        
+        # リクエストコンテキスト内でのみ実行
+        if hasattr(request, 'environ'):
+            # Werkzeugサーバーの終了関数を取得
+            func = request.environ.get("werkzeug.server.shutdown")
+            if func is None:
+                logger.warning("Werkzeugサーバーの終了関数が見つかりません。別の方法で終了します。")
+                # 非同期で終了させる
+                threading.Timer(0.1, lambda: os._exit(0)).start()
+            else:
+                logger.info("Werkzeugサーバーを終了します")
+                func()
+                logger.info("サーバーのシャットダウンが完了しました")
+        else:
+            logger.warning("リクエストコンテキスト外で終了関数が呼び出されました。別の方法で終了します。")
+            # 非同期で終了させる
+            threading.Timer(0.1, lambda: os._exit(0)).start()
+            
+    except Exception as e:
+        logger.error(f"サーバー終了処理中にエラー: {str(e)}\n{traceback.format_exc()}")
+        # エラーが発生した場合も強制終了（少し待ってから）
+        threading.Timer(0.1, lambda: os._exit(1)).start()
+
+# サーバー終了APIエンドポイント
+@app.route('/api/shutdown', methods=['POST'])
+@csrf.exempt  # CSRFトークン検証を除外
+def api_shutdown():
+    """サーバーを終了するAPI"""
+    logger.info("サーバー終了APIが呼び出されました")
+    
+    # レスポンスを返す
+    response = jsonify({'status': 'success', 'message': 'サーバーを終了しています'})
+    
+    # リクエストが完了した後に非同期でシャットダウンを実行
+    @response.call_on_close
+    def on_close():
+        logger.info("レスポンス送信後、シャットダウンを実行します")
+        threading.Timer(0.1, shutdown_server).start()
+        
+    return response

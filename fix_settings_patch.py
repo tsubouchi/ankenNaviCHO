@@ -6,11 +6,18 @@ import sys
 import logging
 from pathlib import Path
 
+def is_frozen() -> bool:
+    """PyInstaller・py2appの両方を安全に検出"""
+    return (
+        hasattr(sys, "_MEIPASS") or                  # PyInstaller
+        getattr(sys, "frozen", None) not in (None, False)  # py2app ほか
+    )
+
 # アプリケーションパスの初期化
 def get_app_paths():
     """アプリケーションの各種パスを取得"""
     # 実行環境がfrozenか（.appとして実行されているか）確認
-    if getattr(sys, 'frozen', False):
+    if is_frozen():
         # .appとして実行されている場合
         if hasattr(sys, '_MEIPASS'):
             # PyInstallerの場合
