@@ -2,6 +2,17 @@
 
 {% block title %}ログイン{% endblock %}
 
+{% block styles %}
+<script>
+    // ログインページでは beforeunload の sendBeacon をスキップ
+    window.__skipBeforeUnload = true;
+    // beforeunload イベントリスナーを解除
+    if (window.__sendShutdownBeacon) {
+        window.removeEventListener('beforeunload', window.__sendShutdownBeacon);
+    }
+</script>
+{% endblock %}
+
 {% block content %}
 <style>
     .login-container {
@@ -79,7 +90,7 @@
         {% endwith %}
 
         <!-- Googleログインボタン -->
-        <a href="{{ url_for('login_with_google') }}" class="login-btn">
+        <a href="{{ url_for('login_with_google') }}" class="login-btn" onclick="window.__skipBeforeUnload=true;">
             <img src="https://www.google.com/favicon.ico" alt="Google" class="google-icon">
             Googleでログイン
         </a>
@@ -101,6 +112,8 @@
                 })
                 .then(response => response.text())
                 .then(result => {
+                    // OAuthリダイレクト/リロード時はbeforeunloadのsendBeaconをスキップ
+                    window.__skipBeforeUnload = true;
                     // リダイレクトされた場合は新しいURLに移動
                     if (result.includes('redirect')) {
                         window.location.href = '/';

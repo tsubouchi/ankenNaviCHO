@@ -6,11 +6,22 @@
     {{ bootstrap.load_css() }}
     <title>{% block title %}案件検索ツール{% endblock %}</title>
     
-    <!-- アプリケーション終了スクリプト -->
+    <!-- beforeunloadによるサーバーシャットダウン処理 -->
     <script>
-        window.addEventListener('beforeunload', () => {
-            // ブラウザが閉じられる前にサーバーシャットダウンAPIを呼び出す
-            navigator.sendBeacon('/api/shutdown');
+        // 初期状態：サーバーシャットダウンを許可
+        window.__skipBeforeUnload = false;
+        // ユーザー操作（クリック、キー押下、マウスダウン、タッチ開始）が発生した場合はシャットダウンをスキップ
+        ['click', 'keydown', 'mousedown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, () => { window.__skipBeforeUnload = true; });
+        });
+        // ログイン関連ページ（/login, /auth/callback等）では送信を常にスキップ
+        if (window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/auth')) {
+            window.__skipBeforeUnload = true;
+        }
+        window.addEventListener('beforeunload', event => {
+            if (!window.__skipBeforeUnload) {
+                navigator.sendBeacon('/api/shutdown');
+            }
         });
     </script>
     

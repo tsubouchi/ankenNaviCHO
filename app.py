@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, has_request_context
 from flask_bootstrap import Bootstrap4
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -1867,7 +1867,7 @@ def shutdown_server():
         release_lock()
         
         # リクエストコンテキスト内でのみ実行
-        if hasattr(request, 'environ'):
+        if has_request_context():
             # Werkzeugサーバーの終了関数を取得
             func = request.environ.get("werkzeug.server.shutdown")
             if func is None:
@@ -1892,18 +1892,21 @@ def shutdown_server():
 @app.route('/api/shutdown', methods=['POST'])
 @csrf.exempt  # CSRFトークン検証を除外
 def api_shutdown():
-    """サーバーを終了するAPI"""
     logger.info("サーバー終了APIが呼び出されました")
-    
+    # リクエストコンテキスト内で shutdown 関数を取得
+    shutdown_func = request.environ.get("werkzeug.server.shutdown")
     # レスポンスを返す
     response = jsonify({'status': 'success', 'message': 'サーバーを終了しています'})
-    
-    # リクエストが完了した後に非同期でシャットダウンを実行
+    # レスポンス送信後に非同期でシャットダウンを実行
     @response.call_on_close
     def on_close():
         logger.info("レスポンス送信後、シャットダウンを実行します")
-        threading.Timer(0.1, shutdown_server).start()
-        
+        def do_shutdown():
+            if shutdown_func:
+                shutdown_func()
+            else:
+                os._exit(0)
+        threading.Timer(0.1, do_shutdown).start()
     return response
 
 # グローバル変数としてロックファイルパスとロックファイルハンドルを定義
