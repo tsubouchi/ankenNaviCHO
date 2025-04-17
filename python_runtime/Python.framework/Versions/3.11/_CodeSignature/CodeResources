@@ -9431,7 +9431,7 @@
 			KqMbc2mpclzok/7TXjOi/7HJCOzHQRo015dcsloo9pU=
 			</data>
 		</dict>
-		<key>lib/python3.11/importlib/_bootstrap_external.py</key>
+		<key>lib/python3.11/importlib/__external.py</key>
 		<dict>
 			<key>hash</key>
 			<data>

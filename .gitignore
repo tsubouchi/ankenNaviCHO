@@ -16,9 +16,10 @@ chromedriver
 # ビルド関連
 /build/
 /dist/
+
 # アプリディレクトリ
-/ankenNaviCHO.app/
-/ankenNaviCHO.exe/
+/ankenNaviCHO_mac.exe/
+/ankenNaviCHO_mac.app/
 
 # キャッシュファイル
 __pycache__/
