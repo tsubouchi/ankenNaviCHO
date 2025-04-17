@@ -20,13 +20,13 @@ def get_app_paths():
             bundle_dir = Path(os.path.dirname(os.path.dirname(sys.executable))) / 'Resources'
         
         # データディレクトリを設定（ユーザーのホームディレクトリ内）
-        app_data_dir = Path(os.path.expanduser('~/Library/Application Support/ankenNaviCHO/data'))
+        app_data_dir = Path(os.path.expanduser('~/Library/Application Support/ankenNaviCHO'))
         
         # 必要なディレクトリを作成
         ensure_app_directories(app_data_dir)
         
         # 設定ファイルのパス
-        settings_file = app_data_dir / 'settings.json'
+        settings_file = app_data_dir / 'crawled_data' / 'settings.json'
         
         return {
             'bundle_dir': bundle_dir,
@@ -38,7 +38,6 @@ def get_app_paths():
         bundle_dir = Path(os.path.dirname(os.path.abspath(__file__)))
         
         # 開発環境ではルートディレクトリを基準としてパスを設定
-        # crawled_dataディレクトリはデータ用、他のディレクトリ（logs, drivers, backups）はルートに
         project_root = bundle_dir
         data_dir = project_root  # ルートディレクトリをデータディレクトリとして使用
         
@@ -75,7 +74,9 @@ def ensure_app_directories(base_dir):
     # 必要なサブディレクトリを作成
     subdirs = ['logs', 'drivers', 'backups', 'crawled_data']
     for subdir in subdirs:
-        os.makedirs(base_dir / subdir, exist_ok=True)
+        subdir_path = base_dir / subdir
+        os.makedirs(subdir_path, exist_ok=True)
+        logging.info(f"ディレクトリを作成しました: {subdir_path}")
 
 # 開発環境用のディレクトリ作成関数（クローリング関連とログなどを分離）
 def ensure_dev_directories(project_root):
@@ -83,14 +84,24 @@ def ensure_dev_directories(project_root):
     # 基本ディレクトリ（ルート直下）
     root_dirs = ['logs', 'drivers', 'backups']
     for dir_name in root_dirs:
-        os.makedirs(project_root / dir_name, exist_ok=True)
+        dir_path = project_root / dir_name
+        os.makedirs(dir_path, exist_ok=True)
+        logging.info(f"開発用ディレクトリを作成しました: {dir_path}")
     
     # データ用ディレクトリ（crawled_data）
-    os.makedirs(project_root / 'crawled_data', exist_ok=True)
+    data_path = project_root / 'crawled_data'
+    os.makedirs(data_path, exist_ok=True)
+    logging.info(f"開発用データディレクトリを作成しました: {data_path}")
 
 # main関数（テスト用）
 def main():
     """テスト用のメイン関数"""
+    # ロガー設定
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
     paths = get_app_paths()
     print(f"バンドルディレクトリ: {paths['bundle_dir']}")
     print(f"データディレクトリ: {paths['data_dir']}")

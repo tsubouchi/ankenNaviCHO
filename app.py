@@ -35,7 +35,7 @@ data_dir = app_paths['data_dir']
 
 # 設定ファイルのパス
 SETTINGS_FILE = str(app_paths['settings_file'])
-PROMPT_FILE = str(data_dir / 'prompt.txt')
+PROMPT_FILE = str(data_dir / 'crawled_data' / 'prompt.txt')
 
 # デフォルト設定
 DEFAULT_SETTINGS = {
@@ -54,45 +54,42 @@ def initialize_app_environment():
     """アプリケーションの初期環境を設定する"""
     logger.info("アプリケーション環境の初期化を開始")
     
-    # 必要なディレクトリの作成
-    required_dirs = [
-        data_dir,
-        data_dir / 'logs',
-        data_dir / 'drivers',
-        data_dir / 'backups',
-        data_dir / 'crawled_data'
-    ]
-    
-    for dir_path in required_dirs:
-        if not os.path.exists(dir_path):
-            logger.info(f"{dir_path}ディレクトリが存在しないため作成します")
-            os.makedirs(dir_path, exist_ok=True)
+    # 必要なディレクトリの作成（fix_settings_patch.pyですでに作成済み）
+    # app_pathsから直接必要なディレクトリを取得
+    data_dir = app_paths['data_dir']
     
     # 設定ファイルの初期化
     settings_file = app_paths['settings_file']
     if not os.path.exists(settings_file):
         default_settings = DEFAULT_SETTINGS.copy()
         logger.info(f"デフォルト設定ファイルを作成します: {settings_file}")
+        # 設定ファイルのディレクトリが存在することを確認
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
         with open(settings_file, 'w', encoding='utf-8') as f:
             json.dump(default_settings, f, ensure_ascii=False, indent=2)
     
     # checked_jobs.jsonの初期化
-    checks_file = app_paths['data_dir'] / 'checked_jobs.json'
+    checks_file = data_dir / 'crawled_data' / 'checked_jobs.json'
     if not os.path.exists(checks_file):
         logger.info(f"チェック状態ファイルを作成します: {checks_file}")
+        # ファイルのディレクトリが存在することを確認
+        checks_file.parent.mkdir(parents=True, exist_ok=True)
         with open(checks_file, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=2)
     
     # prompt.txtの初期化
-    if not os.path.exists(PROMPT_FILE):
-        logger.info(f"フィルタープロンプトファイルを初期化します: {PROMPT_FILE}")
+    prompt_file = data_dir / 'crawled_data' / 'prompt.txt'
+    if not os.path.exists(prompt_file):
+        logger.info(f"フィルタープロンプトファイルを初期化します: {prompt_file}")
+        # ファイルのディレクトリが存在することを確認
+        prompt_file.parent.mkdir(parents=True, exist_ok=True)
         prompt_config = {
             'model': 'gpt-4o-mini',
             'prompt': '',
             'temperature': 0,
             'max_tokens': 100
         }
-        with open(PROMPT_FILE, 'w', encoding='utf-8') as f:
+        with open(prompt_file, 'w', encoding='utf-8') as f:
             json.dump(prompt_config, f, ensure_ascii=False, indent=2)
     
     logger.info("アプリケーション環境の初期化が完了しました")
@@ -629,7 +626,7 @@ def load_settings():
             logger.error(f"prompt.txtの読み込みに失敗: {str(e)}")
     
     # SelfIntroduction.txtから自己紹介文を読み込み
-    self_intro_file = app_paths['data_dir'] / 'SelfIntroduction.txt'
+    self_intro_file = app_paths['data_dir'] / 'crawled_data' / 'SelfIntroduction.txt'
     if os.path.exists(self_intro_file):
         try:
             with open(self_intro_file, 'r', encoding='utf-8') as f:
@@ -834,7 +831,7 @@ def update_settings():
                 settings['self_introduction'] = data['self_introduction']
                 # SelfIntroduction.txtファイルに保存
                 try:
-                    self_intro_file = app_paths['data_dir'] / 'SelfIntroduction.txt'
+                    self_intro_file = app_paths['data_dir'] / 'crawled_data' / 'SelfIntroduction.txt'
                     with open(self_intro_file, 'w', encoding='utf-8') as f:
                         f.write(data['self_introduction'])
                 except Exception as e:

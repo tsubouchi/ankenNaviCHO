@@ -18,6 +18,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from openai import OpenAI
+from fix_settings_patch import get_app_paths
+
+# アプリケーションパスを取得
+app_paths = get_app_paths()
+data_dir = app_paths['data_dir']
+
+# 自己紹介文ファイルのパス
+SELF_INTRO_FILE = data_dir / 'crawled_data' / 'SelfIntroduction.txt'
 
 # ロガーの設定
 logger.remove()  # デフォルトのハンドラを削除
@@ -341,10 +349,10 @@ def bulk_apply_process(urls: List[str]):
         
         # 自己紹介文を読み込み
         try:
-            with open('SelfIntroduction.txt', 'r', encoding='utf-8') as f:
+            with open(SELF_INTRO_FILE, 'r', encoding='utf-8') as f:
                 self_intro = f.read()
         except FileNotFoundError:
-            raise ValueError("SelfIntroduction.txtが見つかりません")
+            raise ValueError(f"{SELF_INTRO_FILE}が見つかりません")
         
         driver = setup_driver()
         
@@ -425,7 +433,10 @@ def bulk_apply_process(urls: List[str]):
 
 def create_self_introduction():
     """自己紹介文が存在しない場合に作成"""
-    if not os.path.exists('SelfIntroduction.txt'):
+    if not os.path.exists(SELF_INTRO_FILE):
+        # 親ディレクトリを作成
+        SELF_INTRO_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
         default_intro = """私は5年以上のWeb開発経験を持つフリーランスエンジニアです。
 フロントエンド（React, Vue.js）からバックエンド（Node.js, Python）まで、
 幅広い技術スタックを活用した開発が可能です。
@@ -439,9 +450,9 @@ def create_self_introduction():
 ご要望に応じて柔軟に対応させていただきますので、
 ぜひご検討いただけますと幸いです。"""
         
-        with open('SelfIntroduction.txt', 'w', encoding='utf-8') as f:
+        with open(SELF_INTRO_FILE, 'w', encoding='utf-8') as f:
             f.write(default_intro)
-        logger.info("デフォルトの自己紹介文を作成しました")
+        logger.info(f"デフォルトの自己紹介文を作成しました: {SELF_INTRO_FILE}")
 
 def init_bulk_apply():
     """一括応募機能の初期化"""
