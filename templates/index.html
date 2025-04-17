@@ -437,16 +437,15 @@
             </li>
         </ul>
         
+        <!-- 「設定」テキストの右側に歯車アイコンを追加 -->
         <div class="sidebar-header">
-            <h3>設定</h3>
+            <h3>設定 <i class="fa fa-cog settings-icon" style="cursor: pointer;" data-toggle="modal" data-target="#settingsModal"></i></h3>
         </div>
         
         <div class="form-group">
             <div class="model-label-container">
                 <label for="model-select">使用モデル</label>
-                <button type="button" class="api-key-btn" data-toggle="modal" data-target="#apiKeyModal">
-                    API Key
-                </button>
+                <!-- 「API Key」テキストを削除 -->
             </div>
             <select id="model-select" class="form-control">
                 <option value="gpt-4o" {% if settings.model == 'gpt-4o' %}selected{% endif %}>GPT-4o</option>
@@ -801,6 +800,77 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal" id="close-self-intro">閉じる</button>
                 <button type="button" class="btn btn-primary" id="save-self-intro">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 統合された設定モーダル -->
+<div class="modal fade" id="settingsModal" tabindex="-1" role="dialog" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="settingsModalLabel">設定</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- タブナビゲーション -->
+                <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="api-tab" data-toggle="tab" href="#api-settings" role="tab" aria-controls="api-settings" aria-selected="true">API設定</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="crowdworks-tab" data-toggle="tab" href="#crowdworks-settings" role="tab" aria-controls="crowdworks-settings" aria-selected="false">クラウドワークス</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="coconala-tab" data-toggle="tab" href="#coconala-settings" role="tab" aria-controls="coconala-settings" aria-selected="false">ココナラ</a>
+                    </li>
+                </ul>
+                
+                <!-- タブコンテンツ -->
+                <div class="tab-content mt-3" id="settingsTabContent">
+                    <!-- API設定タブ -->
+                    <div class="tab-pane fade show active" id="api-settings" role="tabpanel" aria-labelledby="api-tab">
+                        <div class="form-group">
+                            <label for="settings-api-key-input">OpenAI API Key</label>
+                            <input type="password" class="form-control" id="settings-api-key-input" placeholder="OpenAIのAPIキーを入力してください" value="{{ settings.api_key if settings.api_key else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="settings-deepseek-api-key-input">Deepseek API Key</label>
+                            <input type="password" class="form-control" id="settings-deepseek-api-key-input" placeholder="DeepseekのAPIキーを入力してください" value="{{ settings.deepseek_api_key if settings.deepseek_api_key else '' }}">
+                        </div>
+                    </div>
+                    
+                    <!-- クラウドワークス設定タブ -->
+                    <div class="tab-pane fade" id="crowdworks-settings" role="tabpanel" aria-labelledby="crowdworks-tab">
+                        <div class="form-group">
+                            <label for="settings-crowdworks-email">メールアドレス</label>
+                            <input type="email" class="form-control" id="settings-crowdworks-email" placeholder="メールアドレスを入力" value="{{ settings.crowdworks_email if settings.crowdworks_email else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="settings-crowdworks-password">パスワード</label>
+                            <input type="password" class="form-control" id="settings-crowdworks-password" placeholder="パスワードを入力" value="{{ settings.crowdworks_password if settings.crowdworks_password else '' }}">
+                        </div>
+                    </div>
+                    
+                    <!-- ココナラ設定タブ -->
+                    <div class="tab-pane fade" id="coconala-settings" role="tabpanel" aria-labelledby="coconala-tab">
+                        <div class="form-group">
+                            <label for="settings-coconala-email">メールアドレス</label>
+                            <input type="email" class="form-control" id="settings-coconala-email" placeholder="メールアドレスを入力" value="{{ settings.coconala_email if settings.coconala_email else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="settings-coconala-password">パスワード</label>
+                            <input type="password" class="form-control" id="settings-coconala-password" placeholder="パスワードを入力" value="{{ settings.coconala_password if settings.coconala_password else '' }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-primary" id="save-settings">保存</button>
             </div>
         </div>
     </div>
@@ -1235,6 +1305,52 @@
             } catch (error) {
                 console.error('API Key保存中にエラーが発生:', error);
                 showToast('API設定の保存に失敗しました: ' + error.message, 'error');
+            }
+        });
+        
+        // 統合された設定モーダルの保存処理
+        document.getElementById('save-settings')?.addEventListener('click', function() {
+            try {
+                // API設定の取得
+                const apiKey = document.getElementById('settings-api-key-input').value;
+                const deepseekApiKey = document.getElementById('settings-deepseek-api-key-input').value;
+                
+                // クラウドワークス認証設定の取得
+                const crowdworksEmail = document.getElementById('settings-crowdworks-email').value;
+                const crowdworksPassword = document.getElementById('settings-crowdworks-password').value;
+                
+                // ココナラ認証設定の取得
+                const coconalaEmail = document.getElementById('settings-coconala-email').value;
+                const coconalaPassword = document.getElementById('settings-coconala-password').value;
+                
+                // 設定を更新
+                settingsData.api_key = apiKey;
+                settingsData.deepseek_api_key = deepseekApiKey;
+                settingsData.crowdworks_email = crowdworksEmail;
+                settingsData.crowdworks_password = crowdworksPassword;
+                settingsData.coconala_email = coconalaEmail;
+                settingsData.coconala_password = coconalaPassword;
+                
+                // サーバーに送信
+                updateSettings({
+                    api_key: apiKey,
+                    deepseek_api_key: deepseekApiKey,
+                    crowdworks_email: crowdworksEmail,
+                    crowdworks_password: crowdworksPassword,
+                    coconala_email: coconalaEmail,
+                    coconala_password: coconalaPassword
+                });
+                
+                // モーダルを閉じる
+                if (typeof jQuery !== 'undefined' && typeof jQuery.fn.modal !== 'undefined') {
+                    $('#settingsModal').modal('hide');
+                }
+                
+                // 成功メッセージ
+                showToast('設定を保存しました', 'success');
+            } catch (error) {
+                console.error('設定保存中にエラーが発生:', error);
+                showToast('設定の保存に失敗しました: ' + error.message, 'error');
             }
         });
         
