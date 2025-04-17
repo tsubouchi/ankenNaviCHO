@@ -10,6 +10,11 @@
     {% endif %}
 {% endblock %}
 
+{% block styles %}
+    <!-- Font Awesome CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}
+
 {% block content %}
 <!-- JavaScriptに渡す設定データ -->
 <script id="settings-data" type="application/json" data-settings='{{ settings|tojson }}' style="display: none;"></script>
@@ -439,7 +444,7 @@
         
         <!-- 「設定」テキストの右側に歯車アイコンを追加 -->
         <div class="sidebar-header">
-            <h3>設定 <i class="fa fa-cog settings-icon" style="cursor: pointer;" data-toggle="modal" data-target="#settingsModal"></i></h3>
+            <h3>設定 <i class="fas fa-cog settings-icon" style="cursor: pointer;" data-toggle="modal" data-target="#settingsModal"></i></h3>
         </div>
         
         <div class="form-group">
@@ -469,12 +474,12 @@
             </li>
             <li>
                 <a href="{{ url_for('job_history_page') }}">
-                    <i class="fa fa-history"></i> ＞ 案件履歴
+                    <i class="fas fa-history"></i> ＞ 案件履歴
                 </a>
             </li>
             <li>
                 <a href="#" id="clear-all-data-link" class="text-danger">
-                    <i class="fa fa-trash"></i> ＞ 全データクリア
+                    <i class="fas fa-trash"></i> ＞ 全データクリア
                 </a>
             </li>
         </ul>
@@ -482,8 +487,15 @@
         <!-- 更新確認リンクをサイドバー最下部に配置 -->
         <div style="padding: 15px 20px; text-align: center; margin-top: 20px;">
             <a href="#" id="check-update-link" style="color: #ffffff; font-size: 1.3rem; display: inline-block;">
-                <i class="fa fa-refresh"></i> アプリの更新確認
+                <i class="fas fa-sync-alt"></i> アプリの更新確認
             </a>
+        </div>
+        
+        <!-- アプリ終了ボタン -->
+        <div style="padding: 15px 20px; text-align: center; margin-top: 10px;">
+            <button id="shutdown-app-btn" class="btn btn-danger btn-block">
+                <i class="fas fa-power-off"></i> アプリを終了
+            </button>
         </div>
     </nav>
 
@@ -2377,4 +2389,39 @@
     }
 </script>
 <script src="{{ url_for('static', filename='js/fixes.js') }}"></script>
+
+<!-- タブを閉じる前のアラートとアプリ終了処理のスクリプト -->
+<script>
+// アプリ終了処理
+$(document).ready(function() {
+    console.log("終了ボタンの初期化");
+    $("#shutdown-app-btn").on('click', function(e) {
+        e.preventDefault();
+        console.log("終了ボタンがクリックされました");
+        if (confirm('アプリケーションを終了しますか？')) {
+            fetch('/api/shutdown', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(() => {
+                document.body.innerHTML = '<div class="container text-center mt-5"><h2>アプリケーションを終了しています...</h2><p>このウィンドウは閉じて構いません</p></div>';
+            })
+            .catch(error => {
+                console.error('終了処理中にエラーが発生しました:', error);
+                alert('終了処理中にエラーが発生しました。');
+            });
+        }
+    });
+
+    // タブ閉じる前のアラート
+    window.addEventListener('beforeunload', function(e) {
+        console.log("beforeunloadイベントが発生しました");
+        const message = 'サーバーは終了しないので、アプリは裏で動いています。URLに接続すれば、いつでもこの画面に戻れます。';
+        e.returnValue = message; // Chrome では必要
+        return message; // 古いブラウザでの対応
+    });
+});
+</script>
 {% endblock %} 

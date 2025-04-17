@@ -1833,26 +1833,9 @@ def init_app():
 @app.route('/api/browser_close', methods=['POST'])
 @csrf.exempt  # CSRFトークン検証を除外
 def browser_close():
-    """ブラウザが閉じられたときに呼び出されるAPI"""
-    try:
-        # ブラウザからのデータを取得
-        data = request.get_json(silent=True) or {}
-        
-        # Nodeサーバーを終了
-        stop_node_server()
-        
-        logger.info("ブラウザ終了通知を受信しました。Nodeサーバーを終了しました。")
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Nodeサーバーを終了しました'
-        })
-    except Exception as e:
-        logger.error(f"ブラウザ終了処理中にエラー: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+    """ブラウザが閉じられたことを通知するAPI"""
+    logger.info("ブラウザ終了通知を受信しました")
+    return jsonify({'status': 'success'})
 
 # サーバーをシャットダウンする関数
 def shutdown_server():
@@ -2143,20 +2126,3 @@ if __name__ == "__main__":
         if check_already_running(port):
             logger.info("アプリケーションは既に実行中です。終了します。")
             sys.exit(0)
-        
-        # Nodeサーバーを起動（必要な場合）
-        if not os.environ.get('SKIP_NODE_SERVER', False):
-            start_node_server()
-        
-        # サーバーを起動（リローダーを無効化）
-        app.run(
-            host='0.0.0.0', 
-            port=port, 
-            debug=False,  # 常にFalseに設定
-            use_reloader=False  # リローダーを無効化
-        )
-    except Exception as e:
-        logger.error(f"アプリケーション起動エラー: {str(e)}", exc_info=True)
-        # エラー終了時にもリソースを解放
-        cleanup_resources()
-        sys.exit(1)
