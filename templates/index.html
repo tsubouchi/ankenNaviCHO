@@ -1,4 +1,4 @@
-{% extends "bootstrap4/base.html" %}
+{% extends "base.html" %}
 
 {% block title %}
     {% if service == 'crowdworks' %}
@@ -10,8 +10,10 @@
     {% endif %}
 {% endblock %}
 
-{% block styles %}
-{{super()}}
+{% block content %}
+<!-- JavaScriptに渡す設定データ -->
+<script id="settings-data" type="application/json" data-settings='{{ settings|tojson }}' style="display: none;"></script>
+
 <style>
     .wrapper {
         display: flex;
@@ -343,65 +345,6 @@
         display: block !important;
         opacity: 1;
     }
-
-    /* フィルター設定トースト用スタイル */
-    /* 以下のトースト用スタイルはモーダル化に伴い不要になります。削除します。
-    .filter-settings-toast {
-        max-width: 700px;
-        width: 90%;
-        max-height: 300px;
-        overflow-y: auto;
-        background: rgba(255, 255, 255, 0.98);
-        color: #333;
-        padding: 15px 20px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-        display: none;
-        position: fixed;
-        left: 270px;
-        z-index: 10000;
-        border-radius: 8px;
-        backdrop-filter: blur(5px);
-        transform: none;
-    }
-
-    .filter-settings-toast.show {
-        display: block !important;
-        opacity: 1;
-    }
-
-    .filter-settings-toast .filter-settings {
-        background: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .filter-settings-toast textarea {
-        min-height: 125px;
-        font-size: 1.5rem;
-        line-height: 1.6;
-    }
-
-    .filter-settings-toast h5 {
-        font-size: 2.0rem;
-        font-weight: bold;
-        margin-bottom: 0.8rem;
-    }
-
-    .filter-settings-toast .form-group {
-        margin-bottom: 1rem;
-    }
-
-    .filter-settings-toast label {
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-        font-size: 1.6rem;
-    }
-
-    .filter-settings-toast .text-muted {
-        margin-bottom: 0.8rem;
-        font-size: 1.4rem;
-    }
-    */
     
     .progress-container progress {
         width: 100%;
@@ -435,37 +378,7 @@
         border: 1px solid #ddd;
         box-shadow: inset 0 1px 3px rgba(0,0,0,.1);
     }
-
-    /* 自己紹介内容トースト用スタイル */
-    /* 以下のトースト用スタイルはモーダル化に伴い不要になります。削除します。
-    .self-intro-toast {
-        max-width: 700px;
-        width: 90%;
-        max-height: 600px;
-        background: rgba(255, 255, 255, 0.98);
-        color: #333;
-        padding: 15px 20px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-        position: fixed;
-        display: none;
-        left: 270px;
-        z-index: 10000;
-        border-radius: 8px;
-        backdrop-filter: blur(5px);
-        transform: none;
-    }
-
-    .self-intro-toast.show {
-        display: block !important;
-        opacity: 1;
-    }
-    */
 </style>
-{% endblock %}
-
-{% block content %}
-<!-- JavaScriptに渡す設定データ -->
-<script id="settings-data" type="application/json" data-settings='{{ settings|tojson }}' style="display: none;"></script>
 
 <div class="wrapper">
     <!-- Sidebar -->

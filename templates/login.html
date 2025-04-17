@@ -1,9 +1,8 @@
-{% extends "bootstrap4/base.html" %}
+{% extends "base.html" %}
 
 {% block title %}ログイン{% endblock %}
 
-{% block styles %}
-{{super()}}
+{% block content %}
 <style>
     .login-container {
         max-width: 400px;
@@ -55,42 +54,7 @@
         margin-bottom: 20px;
     }
 </style>
-{% endblock %}
 
-{% block scripts %}
-{{super()}}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // URLハッシュからトークンを取得
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            if (accessToken) {
-                // トークンをサーバーに送信
-                fetch('/auth/callback?access_token=' + encodeURIComponent(accessToken), {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                })
-                .then(response => response.text())
-                .then(result => {
-                    // リダイレクトされた場合は新しいURLに移動
-                    if (result.includes('redirect')) {
-                        window.location.href = '/';
-                    } else {
-                        window.location.reload();
-                    }
-                })
-                .catch(error => {
-                    console.error('認証エラー:', error);
-                });
-            }
-        }
-    });
-</script>
-{% endblock %}
-
-{% block content %}
 <div class="container">
     <div class="login-container">
         <div class="login-header">
@@ -121,4 +85,34 @@
         </a>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // URLハッシュからトークンを取得
+        const hash = window.location.hash;
+        if (hash) {
+            const params = new URLSearchParams(hash.substring(1));
+            const accessToken = params.get('access_token');
+            if (accessToken) {
+                // トークンをサーバーに送信
+                fetch('/auth/callback?access_token=' + encodeURIComponent(accessToken), {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                })
+                .then(response => response.text())
+                .then(result => {
+                    // リダイレクトされた場合は新しいURLに移動
+                    if (result.includes('redirect')) {
+                        window.location.href = '/';
+                    } else {
+                        window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('認証エラー:', error);
+                });
+            }
+        }
+    });
+</script>
 {% endblock %}

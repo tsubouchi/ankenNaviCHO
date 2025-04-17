@@ -1,9 +1,8 @@
-{% extends "bootstrap4/base.html" %}
+{% extends "base.html" %}
 
 {% block title %}案件履歴 - クラウドワークス案件一覧{% endblock %}
 
-{% block styles %}
-{{super()}}
+{% block content %}
 <style>
     .wrapper {
         display: flex;
@@ -80,9 +79,7 @@
         gap: 10px;
     }
 </style>
-{% endblock %}
 
-{% block content %}
 <div class="wrapper">
     <!-- サイドバー -->
     <nav id="sidebar">

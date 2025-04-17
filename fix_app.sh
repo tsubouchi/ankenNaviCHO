@@ -190,41 +190,8 @@ if [ "$ICON_CREATED" != true ]; then
     echo "有効なアイコンソースが見つからなかったため、アイコンの作成をスキップします。"
 fi
 
-# Pythonランタイムを同梱 (python_runtimeディレクトリが存在する場合)
-PYTHON_RUNTIME_SOURCE_DIR="python_runtime"
-if [ -d "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" ]; then
-    echo "Pythonランタイムを同梱しています..."
-    # Versions/Current シンボリックリンクのチェックと作成
-    if [ ! -L "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/Current" ]; then
-        echo "Versions/Current シンボリックリンクを作成します..."
-        # 最新バージョンを検出 (通常は一つのみ)
-        LATEST_VERSION=$(ls -1 "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
-        if [ -z "$LATEST_VERSION" ]; then
-            # もしバージョン番号のディレクトリがなければディレクトリ名を直接使用
-            LATEST_VERSION=$(ls -1 "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" | grep -v "Current" | head -n 1)
-        fi
-        if [ -n "$LATEST_VERSION" ]; then
-            echo "Python バージョン $LATEST_VERSION を使用します"
-            (cd "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework/Versions/" && ln -sf "$LATEST_VERSION" Current)
-        else
-            echo "${RED}警告: Python.framework の有効なバージョンディレクトリが見つかりません。${NC}"
-        fi
-    fi
-    
-    # Python.framework を正しくコピー
-    cp -R "$PYTHON_RUNTIME_SOURCE_DIR/Python.framework" "$FRAMEWORKS_DIR/"
-    
-    # 実行可能ファイルの権限を確認
-    if [ -f "$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3" ]; then
-        chmod +x "$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
-        echo "python3 実行ファイルの権限を設定しました"
-    fi
-    
-    echo "Pythonランタイムの同梱が完了しました。"
-else
-    echo "${RED}警告: Pythonランタイムディレクトリ ($PYTHON_RUNTIME_SOURCE_DIR/Python.framework) が見つかりません。ランタイムの同梱をスキップします。${NC}"
-    echo "${RED}       -> アプリケーションはシステムのPythonに依存します。${NC}"
-fi
+# Pythonランタイムの同梱を削除 - システムPythonを使用する方針に変更
+echo "Pythonランタイムは同梱せず、システムのPythonを使用します..."
 
 # 起動スクリプトを作成（シンプル版）
 cat > "$MACOS_DIR/run" << 'EOF_RUN'
@@ -244,40 +211,77 @@ echo "arm64アーキテクチャで実行中..." >&2 # 確認用ログ
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CONTENTS_DIR="$SCRIPT_DIR/.."
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 LOG_DIR="$RESOURCES_DIR/logs"
 LAUNCHER_LOG_FILE="$LOG_DIR/launcher.log"
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LAUNCHER_LOG_FILE") 2>&1
 echo "--- ランチャースクリプト開始: $(date) ---"
 echo "実行アーキテクチャ: $(arch)"
-# --- 変数定義 ---
-# SCRIPT_DIR以下は元のコードにもあるので、重複定義を避けるためコメントアウト
-# SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# CONTENTS_DIR="$SCRIPT_DIR/.."
-# RESOURCES_DIR="$CONTENTS_DIR/Resources"
-# FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
-VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
-SETUP_DONE_FLAG="$HOME/Library/Application Support/ankenNaviCHO/.setup_done"
-PYTHON_EXEC="$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
 
-# 同梱Pythonが存在しない場合はシステムのPython3を使用
-if [ ! -x "$PYTHON_EXEC" ]; then
-    PYTHON_EXEC=$(which python3)
-    if [ -z "$PYTHON_EXEC" ]; then
-        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。アプリケーションを実行できません。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
-        exit 1
-    fi
-fi
-echo "使用するPython: $PYTHON_EXEC"
+# --- 変数定義 ---
+VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
+SUPPORT_DIR="$HOME/Library/Application Support/ankenNaviCHO"
+SETUP_DONE_FLAG="$SUPPORT_DIR/.setup_done"
 
 # エラーハンドリング関数
 handle_error() {
     ERROR_MESSAGE=$1
-    # launcher.logへのパスを修正
     /usr/bin/osascript -e "display dialog \"エラーが発生しました:\\n\\n$ERROR_MESSAGE\\n\\n詳細はログファイルを確認してください。\\n$LAUNCHER_LOG_FILE\" buttons {\"OK\"} default button \"OK\" with title \"エラー\" with icon stop"
     exit 1
 }
+
+# Pythonが存在し、バージョンが適切か確認する関数
+check_python_version() {
+    # Pythonが存在するかチェック
+    if ! command -v python3 &> /dev/null; then
+        echo "Python3が見つかりません。ダウンロードを促します。"
+        DOWNLOAD_RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+            display dialog "Python3が見つかりません。\\n\\nアプリケーションの実行には Python 3.11 以上が必要です。\\n\\nPython をダウンロードしますか？" buttons {"キャンセル", "ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution
+EOF_DIALOG
+        )
+        
+        if [[ "$DOWNLOAD_RESULT" == *"ダウンロード"* ]]; then
+            # Pythonのダウンロードサイトを開く
+            open "https://www.python.org/downloads/"
+            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+        fi
+        return 1
+    fi
+    
+    # Pythonのバージョンを確認
+    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+    PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+    
+    echo "検出されたPythonバージョン: $PYTHON_VERSION"
+    
+    # バージョンが3.11以下の場合は新しいバージョンを促す
+    if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
+        echo "Pythonバージョンが古いため、新しいバージョンのダウンロードを促します。"
+        DOWNLOAD_RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+            display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\\n\\nアプリケーションの実行には Python 3.11 以上が推奨されます。\\n\\nPython 3.13.3 をダウンロードしますか？" buttons {"このまま続行", "ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution
+EOF_DIALOG
+        )
+        
+        if [[ "$DOWNLOAD_RESULT" == *"ダウンロード"* ]]; then
+            # Pythonのダウンロードサイトを開く
+            open "https://www.python.org/downloads/"
+            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+            return 1
+        fi
+        
+        echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
+    fi
+    
+    return 0
+}
+
+# Pythonバージョンをチェック
+check_python_version
+if [ $? -ne 0 ]; then
+    echo "Pythonのセットアップが必要です。アプリケーションを終了します。"
+    exit 0
+fi
 
 # セットアップ済みかチェック
 if [ ! -f "$SETUP_DONE_FLAG" ]; then
@@ -306,8 +310,8 @@ source "$VENV_DIR/bin/activate" || handle_error "仮想環境のアクティベ�
 echo "リソースディレクトリに移動しています: $RESOURCES_DIR"
 cd "$RESOURCES_DIR" || handle_error "リソースディレクトリへの移動に失敗しました。"
 
-echo "アプリケーションランチャーを実行しています: $PYTHON_EXEC $RESOURCES_DIR/app_launcher.py"
-"$PYTHON_EXEC" "$RESOURCES_DIR/app_launcher.py" || handle_error "アプリケーションランチャーの実行に失敗しました。"
+echo "アプリケーションランチャーを実行しています: python3 $RESOURCES_DIR/app_launcher.py"
+python3 "$RESOURCES_DIR/app_launcher.py" || handle_error "アプリケーションランチャーの実行に失敗しました。"
 
 echo "アプリケーションが終了しました。"
 EOF_RUN
@@ -319,11 +323,9 @@ cat > "$MACOS_DIR/setup" << 'EOF_SETUP'
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CONTENTS_DIR="$SCRIPT_DIR/.."
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 VENV_DIR="$HOME/Library/Application Support/ankenNaviCHO/venv"
 SUPPORT_DIR="$HOME/Library/Application Support/ankenNaviCHO"
 SETUP_DONE_FLAG="$SUPPORT_DIR/.setup_done"
-PYTHON_EXEC="$FRAMEWORKS_DIR/Python.framework/Versions/Current/bin/python3"
 LOG_FILE="$RESOURCES_DIR/logs/setup.log"
 
 # ログディレクトリ作成
@@ -333,18 +335,53 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 echo "セットアップを開始します: $(date)"
 echo "実行アーキテクチャ: $(arch)"
 
-# 同梱Pythonが存在しない場合はシステムのPython3を使用
-if [ ! -x "$PYTHON_EXEC" ]; then
-    echo "同梱Pythonが見つからないため、システムのPython3を探します..."
-    PYTHON_EXEC=$(which python3)
-    if [ -z "$PYTHON_EXEC" ]; then
+# Pythonのバージョンチェック
+check_python_version() {
+    # Pythonが存在するかチェック
+    if ! command -v python3 &> /dev/null; then
         echo "エラー: Python3が見つかりません。"
-        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\\n\\nPython 3.8以上をインストールしてください。" buttons {"OK"} default button "OK" with title "エラー" with icon stop'
-        exit 1
+        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\\n\\nPython 3.11以上をインストールしてください。\\n\\nPython 3.13.3のダウンロードページを開きますか？" buttons {"キャンセル", "ダウンロードページを開く"} default button "ダウンロードページを開く" with title "エラー" with icon stop'
+        if [[ $? -eq 0 ]]; then
+            open "https://www.python.org/downloads/"
+        fi
+        return 1
     fi
-    echo "システムのPython3を使用します: $PYTHON_EXEC"
+    
+    # Pythonのバージョンを確認
+    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+    PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+    
+    echo "検出されたPythonバージョン: $PYTHON_VERSION"
+    
+    # バージョンが3.11以下の場合は警告を表示
+    if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
+        echo "警告: Pythonバージョンが推奨より古いです。"
+        RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+            display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\\n\\nアプリケーションの実行には Python 3.11 以上が推奨されます。\\n\\n続行しますか？" buttons {"キャンセル", "ダウンロードページを開く", "続行"} default button "ダウンロードページを開く" with title "警告" with icon caution
+EOF_DIALOG
+        )
+        
+        if [[ "$RESULT" == *"キャンセル"* ]]; then
+            return 1
+        elif [[ "$RESULT" == *"ダウンロード"* ]]; then
+            open "https://www.python.org/downloads/"
+            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+            return 1
+        fi
+        
+        echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
+    fi
+    
+    return 0
+}
+
+# Pythonバージョンチェックの実行
+check_python_version
+if [ $? -ne 0 ]; then
+    echo "Pythonのセットアップが必要です。セットアップを中止します。"
+    exit 1
 fi
-echo "使用するPython: $PYTHON_EXEC"
 
 # エラーハンドリング関数
 handle_error() {
@@ -367,8 +404,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # 仮想環境を作成
-echo "仮想環境を作成しています: $VENV_DIR (使用するPython: $PYTHON_EXEC)"
-"$PYTHON_EXEC" -m venv "$VENV_DIR"
+echo "仮想環境を作成しています: $VENV_DIR (使用するPython: $(which python3))"
+python3 -m venv "$VENV_DIR"
 if [ $? -ne 0 ]; then
   handle_error "仮想環境の作成に失敗しました。\\nPythonが正しくインストールされているか、またはvenvモジュールが利用可能か確認してください。"
 fi
@@ -503,7 +540,7 @@ END_SCRIPT
   # スクリプトを一時ファイルに書き出して実行
   TEMP_SCRIPT_FILE="$RESOURCES_DIR/.temp_chromedriver_cache.py"
   echo "$CACHE_SCRIPT" > "$TEMP_SCRIPT_FILE"
-  "$PYTHON_EXEC" "$TEMP_SCRIPT_FILE"
+  python3 "$TEMP_SCRIPT_FILE"
   CACHE_EXIT_CODE=$?
   rm -f "$TEMP_SCRIPT_FILE"
 

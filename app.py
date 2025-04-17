@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
-from flask_bootstrap import Bootstrap
+from flask_bootstrap import Bootstrap4
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
 from functools import wraps
@@ -161,7 +161,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-Bootstrap(app)
+Bootstrap4(app)
 csrf = CSRFProtect(app)
 
 # CSRFトークンをAjaxリクエストでも検証するように設定
