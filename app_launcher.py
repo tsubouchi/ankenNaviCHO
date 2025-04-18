@@ -298,6 +298,16 @@ def run_app():
     else:
         logger.error(f"サーバーの起動タイムアウト（ポート: {port}）")
 
+    # Flaskプロセスの終了を待機して親プロセスも終了します
+    try:
+        flask_process.wait()
+        logger.info("Flaskサーバープロセスが終了しました")
+    except Exception as e:
+        logger.error(f"Flaskプロセス待機中にエラー: {e}")
+
+    cleanup()
+    sys.exit(0)
+
 if __name__ == "__main__":
     # シグナルハンドラを設定
     signal.signal(signal.SIGINT, signal_handler)
@@ -311,10 +321,6 @@ if __name__ == "__main__":
         # アプリケーションを実行
         run_app()
         
-        # メインスレッドを維持（Ctrl+Cを受け取れるように）
-        while True:
-            time.sleep(1)
-            
     except KeyboardInterrupt:
         logger.info("キーボード割り込みを受信しました。アプリケーションを終了します。")
     except Exception as e:

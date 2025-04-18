@@ -13,6 +13,43 @@
 {% block styles %}
     <!-- Font Awesome CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- 設定モーダルの高さと余白を調整 -->
+    <style>
+        /* モーダル全体 */
+#settingsModal .modal-dialog {
+  margin: 8px auto !important;
+  max-width: 600px !important;
+}
+#settingsModal .modal-content {
+  max-height: none !important;
+  overflow: visible !important;
+}
+#settingsModal .modal-header,
+#settingsModal .modal-footer {
+  padding: 4px 8px !important;
+}
+#settingsModal .modal-body {
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+  padding: 4px 8px !important;
+}
+/* タブ周りも完全に潰す */
+#settingsModal .nav-tabs,
+#settingsModal .tab-content,
+#settingsModal .tab-pane {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+#settingsModal .form-group {
+  margin-bottom: 4px !important;
+}
+#settingsModal .form-control {
+  padding: 4px 8px !important;
+  font-size: 0.875rem !important;
+}
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -20,369 +57,941 @@
 <script id="settings-data" type="application/json" data-settings='{{ settings|tojson }}' style="display: none;"></script>
 
 <style>
+    :root {
+        /* ベースカラー */
+        --bg-light: #f8f9fa;
+        --bg-white: #ffffff;
+        --bg-sidebar: #f0f4f9;
+        --text-primary: #333333;
+        --text-secondary: #6c757d;
+        --text-light: #ffffff;
+        
+        /* アクセントカラー */
+        --primary: #6366f1;
+        --primary-light: #818cf8;
+        --primary-dark: #4f46e5;
+        --success: #22c55e;
+        --warning: #eab308;
+        --danger: #ef4444;
+        
+        /* ボーダーとシャドウ */
+        --border-color: #e5e7eb;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+        
+        /* フォントサイズ */
+        --text-xs: 0.75rem;
+        --text-sm: 0.875rem;
+        --text-base: 1rem;
+        --text-lg: 1.125rem;
+        --text-xl: 1.25rem;
+        --text-2xl: 1.5rem;
+        
+        /* スペーシング */
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-6: 1.5rem;
+        --space-8: 2rem;
+        --space-12: 3rem;
+        
+        /* 角丸 */
+        --radius-sm: 0.25rem;
+        --radius: 0.5rem;
+        --radius-lg: 1rem;
+        --radius-full: 9999px;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        color: var(--text-primary);
+        /* 背景を薄い青グラデーションに変更 */
+        background: radial-gradient(circle at top, #e0f7fa, #ffffff);
+        line-height: 1.5;
+        font-size: var(--text-base);
+    }
+    
     .wrapper {
         display: flex;
         width: 100%;
+        min-height: 100vh;
+        backdrop-filter: blur(8px);
     }
     
+    /* サイドバー */
     #sidebar {
-        min-width: 250px;
-        max-width: 250px;
-        min-height: 100vh;
-        background: #343a40;
-        color: #fff;
+        width: 250px;
+        background: #f8f9fa;
+        color: var(--text-primary);
         transition: all 0.3s;
-    }
-    
-    #sidebar .sidebar-header {
-        padding: 20px;
-        background: #2c3136;
-    }
-    
-    #sidebar ul.components {
-        padding: 20px 0;
-        border-bottom: 1px solid #47748b;
-    }
-    
-    #sidebar ul li a {
-        padding: 10px;
-        font-size: 1.1em;
-        display: block;
-        color: #fff;
-        text-decoration: none;
-    }
-    
-    #sidebar ul li a:hover {
-        background: #2c3136;
-    }
-    
-    #sidebar .btn-fetch {
-        margin: 15px 20px;
-        width: calc(100% - 40px);
-    }
-    
-    #content {
-        width: 100%;
-        padding: 20px;
-        min-height: 100vh;
-        transition: all 0.3s;
-    }
-    
-    .user-info {
-        padding: 10px 20px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: #2c3136;
+        box-shadow: var(--shadow);
+        z-index: 10;
         position: relative;
     }
     
-    .user-avatar-container {
-        cursor: pointer;
+    /* サイドバーのロゴエリア */
+    #sidebar .sidebar-header {
+        padding: var(--space-4);
+        background: #6366f1;
+        text-align: center;
     }
-
+    
+    #sidebar .sidebar-header h3 {
+        margin: 0;
+    }
+    
+    #sidebar .sidebar-header a {
+        color: var(--text-light);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    #sidebar .sidebar-header a .settings-icon,
+    #sidebar .sidebar-header a {
+        font-size: var(--text-lg);
+        font-weight: 600;
+    }
+    
+    #sidebar .sidebar-header small {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.7em;
+    }
+    
+    #sidebar ul.components {
+        padding: var(--space-4) 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    #sidebar ul li a {
+        padding: var(--space-4) var(--space-6);
+        font-size: var(--text-base);
+        display: flex;
+        align-items: center;
+        color: var(--text-primary);
+        text-decoration: none;
+        transition: all 0.2s ease;
+        border-radius: var(--radius);
+        margin: var(--space-1) var(--space-4);
+    }
+    
+    #sidebar ul li a i {
+        margin-right: var(--space-3);
+        font-size: var(--text-lg);
+    }
+    
+    #sidebar ul li a:hover, #sidebar ul li a.active {
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary);
+    }
+    
+    /* 一括応募ボタン */
+    #sidebar .btn-fetch {
+        margin: var(--space-4) auto;
+        width: calc(100% - var(--space-8));
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        border: none;
+        color: var(--text-light);
+        font-weight: 500;
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    #sidebar .btn-fetch i {
+        margin-right: var(--space-2);
+    }
+    
+    #sidebar .btn-fetch:hover {
+        background: #4f46e5;
+        transform: translateY(-1px);
+    }
+    
+    /* メインコンテンツ */
+    #content {
+        flex: 1;
+        padding: var(--space-4);
+        background-color: var(--bg-white);
+        box-shadow: var(--shadow-sm);
+        border-radius: var(--radius-lg);
+        margin: var(--space-4);
+        max-width: calc(100% - 300px);
+    }
+    
+    @media (max-width: 768px) {
+        #content {
+            max-width: 100%;
+            margin: 0;
+        }
+    }
+    
+    /* ユーザー情報 */
+    .user-info {
+        padding: var(--space-3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #f0f0f0;
+        border-radius: 0;
+        margin-bottom: 0;
+    }
+    
     .user-avatar {
-        width: 32px;
-        height: 32px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
-        transition: transform 0.2s;
-    }
-
-    .user-avatar:hover {
-        transform: scale(1.1);
+        object-fit: cover;
+        border: 2px solid white;
+        box-shadow: var(--shadow-sm);
     }
 
     .logout-toast {
         position: absolute;
         top: 100%;
-        background: #fff;
-        color: #333;
-        padding: 8px 16px;
-        border-radius: 4px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        right: 0;
+        background: var(--bg-white);
+        color: var(--text-primary);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
         z-index: 1000;
         cursor: pointer;
         display: none;
         animation: fadeIn 0.2s ease-in-out;
+        font-size: var(--text-sm);
+        min-width: 100px;
+        text-align: center;
+        margin-top: var(--space-2);
     }
 
     .logout-toast:hover {
-        background: #f8f9fa;
+        background: var(--bg-light);
     }
 
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
+        from { opacity: 0; transform: translateY(-5px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
+    /* テーブルコンテナ */
     .table-container {
-        margin-top: 2rem;
-        margin-bottom: 2rem;
+        margin-top: var(--space-4);
+        margin-bottom: var(--space-4);
+        background: var(--bg-white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        width: 100%;
     }
-    .check-column {
-        width: 50px;
+    
+    .table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
     }
-    .title-column {
-        min-width: 300px;
+    
+    /* テーブルヘッダーを中央揃え */
+    .table thead th {
+        text-align: center;
+        background-color: #343a40;
+        color: var(--text-light);
+        font-weight: 500;
+        font-size: var(--text-sm);
+        padding: var(--space-3);
+        border-bottom: none;
     }
-    .budget-column {
-        width: 150px;
+    
+    .table tbody td {
+        padding: var(--space-3);
+        vertical-align: middle;
+        border-bottom: 1px solid var(--border-color);
+        font-size: var(--text-sm);
+        word-break: break-word;
     }
-    .client-column {
-        width: 150px;
+    
+    .table tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.01);
     }
-    .date-column {
-        width: 120px;
+    
+    .table tbody tr:last-child td {
+        border-bottom: none;
     }
-    .reason-column {
-        width: 200px;
+    
+    /* 列の幅調整 */
+    .check-column { width: 40px; text-align: center; }
+    .title-column { width: auto; }
+    .detail-column { width: 70px; text-align: center; }
+    .budget-column { width: 90px; text-align: right; }
+    .client-column { width: 100px; }
+    .date-column { width: 90px; text-align: center; white-space: pre-line; }
+    .reason-column { width: 150px; }
+    
+    /* タイトル列のスタイル */
+    .title-column a {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 500;
+        display: block;
+        max-width: 100%;
     }
+    
+    .title-column a:hover {
+        text-decoration: underline;
+    }
+    
+    /* 詳細ボタン */
     .toggle-details {
-        padding: 0.25rem 0.5rem;
-        margin-left: 0.5rem;
-        color: #007bff;
-        background: none;
-        border: 1px solid #007bff;
-        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-2) var(--space-2);
+        color: var(--text-light);
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        border: none;
+        border-radius: var(--radius);
         cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: var(--text-xs);
+        font-weight: 500;
+        width: 100%;
+        max-width: 70px;
     }
+    
     .toggle-details:hover {
-        background-color: #007bff;
-        color: #fff;
+        background-color: #138496;
     }
+    
+    /* 「詳細」テキストの間隔調整 */
+    .budget-display {
+        font-weight: 500;
+    }
+    
+    /* 見出し */
+    h2.mb-4 {
+        font-size: var(--text-xl);
+        font-weight: 600;
+        margin-bottom: var(--space-4);
+        color: var(--text-primary);
+    }
+    
+    /* サイドバーのロゴエリア */
+    #sidebar .sidebar-header {
+        padding: var(--space-4);
+        background: #6366f1;
+        text-align: center;
+    }
+    
+    #sidebar .sidebar-header h3 {
+        color: var(--text-light);
+        font-size: var(--text-lg);
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    /* テーブル内チェックボックス */
+    .form-check-input {
+        width: 18px;
+        height: 18px;
+    }
+    
+    /* モーダル */
+    .modal-dialog {
+        max-width: 600px;
+    }
+    
+    .modal-content {
+        border: none;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    
+    .modal-header {
+        padding: var(--space-4) var(--space-6);
+        background: var(--bg-white);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
     .modal-body {
+        padding: var(--space-6);
         white-space: pre-wrap;
         max-height: 70vh;
         overflow-y: auto;
     }
-    .modal-title {
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-right: 2rem;
+    
+    .modal-footer {
+        padding: var(--space-4) var(--space-6);
+        background: var(--bg-white);
+        border-top: 1px solid var(--border-color);
     }
+    
+    .modal-title {
+        font-size: var(--text-xl);
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+    }
+    
+    /* ボタン */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 500;
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius);
+        transition: all 0.2s ease;
+        font-size: var(--text-sm);
+        cursor: pointer;
+    }
+    
+    .btn i {
+        margin-right: var(--space-2);
+    }
+    
+    .btn-primary {
+        background-color: var(--primary);
+        color: var(--text-light);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow);
+    }
+    
+    .btn-secondary {
+        background-color: var(--bg-light);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+    
+    .btn-secondary:hover {
+        background-color: #e9ecef;
+    }
+    
+    .btn-danger {
+        background-color: var(--danger);
+        color: var(--text-light);
+        border: none;
+    }
+    
+    .btn-danger:hover {
+        background-color: #dc2626;
+    }
+    
+    .btn-lg {
+        padding: var(--space-3) var(--space-6);
+        font-size: var(--text-base);
+        border-radius: var(--radius);
+    }
+    
+    /* フォーム */
     #sidebar .form-group {
-        padding: 10px 20px;
-        color: #fff;
+        padding: var(--space-4) var(--space-6);
+        margin-bottom: var(--space-4);
     }
 
     #sidebar .form-group label {
-        color: #fff;
-        margin-bottom: 5px;
+        display: block;
+        margin-bottom: var(--space-2);
+        font-size: var(--text-sm);
+        font-weight: 500;
+        color: var(--text-primary);
     }
 
     #sidebar .form-control {
-        background-color: #2c3136;
-        border: 1px solid #47748b;
-        color: #fff;
+        width: 100%;
+        padding: var(--space-3);
+        font-size: var(--text-sm);
+        background-color: var(--bg-white);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        transition: all 0.2s ease;
     }
 
     #sidebar .form-control:focus {
-        background-color: #2c3136;
-        color: #fff;
-        border-color: #007bff;
-    }
-
-    #sidebar input[type="number"] {
-        width: 100%;
-    }
-
-    #sidebar .model-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 10px;
-    }
-
-    #sidebar .model-label-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 5px;
-    }
-
-    #sidebar .api-key-btn {
-        color: #adb5bd;
-        background: none;
-        border: none;
-        padding: 0 5px;
-        font-size: 0.9em;
-        cursor: pointer;
-        text-decoration: none;
-    }
-
-    #sidebar .api-key-btn:hover {
-        color: #ced4da;
-    }
-
-    .api-key-modal .modal-content {
-        background-color: #343a40;
-        color: #fff;
-    }
-
-    .api-key-modal .modal-header {
-        border-bottom: 1px solid #47748b;
-    }
-
-    .api-key-modal .modal-footer {
-        border-top: 1px solid #47748b;
-    }
-
-    .api-key-modal .form-control {
-        background-color: #2c3136;
-        border: 1px solid #47748b;
-        color: #fff;
-    }
-
-    .api-key-modal .form-control:focus {
-        background-color: #2c3136;
-        color: #fff;
-        border-color: #007bff;
-    }
-
-    .filter-settings {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-
-    .filter-settings textarea {
-        width: 100%;
-        min-height: 200px;
-        resize: vertical;
-    }
-
-    #content .view-container {
-        display: none;
-    }
-
-    #content .view-container.active {
-        display: block;
-    }
-
-    .btn-disabled {
-        background-color: #6c757d;
-        border-color: #6c757d;
-        cursor: not-allowed;
-        opacity: 0.65;
-    }
-
-    .btn-disabled:hover {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-
-    .detail-column {
-        width: 100px;
-        text-align: center;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+        outline: none;
     }
     
-    .btn-outline-info {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-    }
-    
-    .job-details th {
-        background-color: #f8f9fa;
-    }
-    
-    .modal-description {
-        white-space: pre-wrap;
-    }
-
-    .progress-wrapper {
-        position: relative;
-        width: 100%;
-    }
-    
-    .progress-percentage {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: #1a237e;
-        font-weight: bold;
-        text-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
-        font-size: 1.2rem;
-        z-index: 1;
-        background: rgba(255, 255, 255, 0.7);
-        padding: 0 8px;
-        border-radius: 3px;
-    }
-
-    /* トースト通知のスタイル */
+    /* トースト通知 */
     .toast-notification {
         position: fixed;
-        top: 20px;
-        right: 20px;
-        width: auto;
+        top: var(--space-6);
+        right: var(--space-6);
         max-width: 300px;
-        background-color: #fff;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-        border-radius: 4px;
+        background-color: var(--bg-white);
+        color: var(--text-primary);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
         z-index: 1050;
-        padding: 10px 15px;
-        font-size: 14px;
+        overflow: hidden;
         display: none;
         opacity: 0;
         transition: opacity 0.3s ease-in-out;
     }
-
+    
+    .toast-notification .toast-content {
+        padding: var(--space-4);
+        display: flex;
+        align-items: center;
+    }
+    
+    .toast-notification .toast-icon {
+        margin-right: var(--space-3);
+        font-size: var(--text-xl);
+    }
+    
+    .toast-notification .toast-message {
+        flex: 1;
+        font-size: var(--text-sm);
+    }
+    
     .toast-notification.success {
-        background: #28a745;
-        color: white;
-        border-left: 4px solid #1e7e34;
+        border-left: 4px solid var(--success);
     }
-
+    
+    .toast-notification.success .toast-icon {
+        color: var(--success);
+    }
+    
     .toast-notification.error {
-        background: #dc3545;
-        color: white;
-        border-left: 4px solid #bd2130;
+        border-left: 4px solid var(--danger);
     }
-
+    
+    .toast-notification.error .toast-icon {
+        color: var(--danger);
+    }
+    
     .toast-notification.warning {
-        background: #ffc107;
-        color: #333;
-        border-left: 4px solid #d39e00;
+        border-left: 4px solid var(--warning);
     }
-
+    
+    .toast-notification.warning .toast-icon {
+        color: var(--warning);
+    }
+    
     .toast-notification.toast-show {
-        display: block !important;
+        display: block;
         opacity: 1;
     }
     
-    .progress-container progress {
-        width: 100%;
-        height: 32px;
-        border-radius: 4px;
-        display: block;
-        -webkit-appearance: none;
-        appearance: none;
+    /* プログレスバー */
+    .progress-container {
+        margin: var(--space-4) var(--space-6);
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius);
+        overflow: hidden;
     }
     
-    .progress-container progress::-webkit-progress-bar {
-        background-color: #f5f5f5;
-        border-radius: 4px;
+    .progress {
+        height: 8px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius-full);
+        overflow: hidden;
     }
     
-    .progress-container progress::-webkit-progress-value {
-        background-color: #007bff;
-        border-radius: 4px;
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(to right, var(--primary), var(--primary-light));
         transition: width 0.3s ease;
     }
     
-    .progress-container progress::-moz-progress-bar {
-        background-color: #007bff;
-        border-radius: 4px;
-        transition: width 0.3s ease;
+    .progress-status {
+        margin-top: var(--space-2);
+        text-align: center;
+        font-size: var(--text-xs);
+        color: var(--text-secondary);
+    }
+    
+    /* 一括応募ボタン */
+    .bulk-apply-container {
+        margin: var(--space-4) 0;
+        text-align: center;
+    }
+    
+    #bulk-apply-btn {
+        padding: var(--space-3) var(--space-8);
+        font-size: var(--text-base);
+        font-weight: 500;
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        color: var(--text-light);
+        border: none;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        transition: all 0.2s ease;
+    }
+    
+    #bulk-apply-btn:hover {
+        background-color: #4f46e5;
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    /* モバイル対応 */
+    @media (max-width: 768px) {
+        .wrapper {
+            flex-direction: column;
+        }
+        
+        #sidebar {
+            width: 100%;
+            margin-bottom: var(--space-4);
+        }
+        
+        #content {
+            margin: 0;
+            border-radius: 0;
+        }
+        
+        .table-responsive {
+            border-radius: var(--radius);
+            overflow-x: auto;
+        }
+        
+        .table th, .table td {
+            white-space: nowrap;
+        }
+        
+        .modal-dialog {
+            margin: var(--space-2);
+        }
+    }
+    
+    /* アクセシビリティ */
+    a:focus, button:focus, input:focus, select:focus, textarea:focus {
+        outline: 2px solid rgba(99, 102, 241, 0.5);
+        outline-offset: 2px;
+    }
+    
+    /* シンプルさと一貫性を高めるための追加スタイル */
+    h2 {
+        font-size: var(--text-2xl);
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: var(--space-6);
+    }
+    
+    .card {
+        background: var(--bg-white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        margin-bottom: var(--space-6);
+        overflow: hidden;
+    }
+    
+    .card-header {
+        padding: var(--space-4);
+        background: var(--bg-light);
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 600;
+    }
+    
+    .card-body {
+        padding: var(--space-4);
+    }
+    
+    /* トグルスイッチ */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 24px;
     }
 
-    /* プログレスバーの特別なスタイリングを追加 */
-    #fetch-progress-container .progress {
-        background-color: #f5f5f5;
-        border: 1px solid #ddd;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,.1);
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
     }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.4s;
+        border-radius: 34px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+        background-color: var(--primary);
+    }
+
+    input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+    }
+    
+    /* ジョブ詳細のグリッドレイアウト */
+    .job-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+    }
+    
+    .job-info-item {
+        background-color: var(--bg-light);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+    }
+    
+    .info-label {
+        font-size: var(--text-xs);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        margin-bottom: var(--space-2);
+        font-weight: 600;
+    }
+    
+    .info-value {
+        font-size: var(--text-base);
+        color: var(--text-primary);
+    }
+    
+    .job-description-container {
+        background-color: var(--bg-light);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+    }
+    
+    .modal-description {
+        margin-top: var(--space-2);
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+    
+    /* プログレスバーの改善 */
+    #fetch-progress-container {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+        margin: var(--space-4) var(--space-6);
+    }
+    
+    .progress-wrapper {
+        position: relative;
+        width: 100%;
+        height: 8px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+    }
+    
+    #progress-bar-div {
+        position: absolute;
+        height: 100%;
+        background: linear-gradient(to right, var(--primary), var(--primary-light));
+        transition: width 0.3s ease;
+        border-radius: var(--radius-full);
+    }
+    
+    #progress-status {
+        margin-top: var(--space-3);
+        text-align: center;
+        font-size: var(--text-xs);
+        color: var(--text-light);
+        font-weight: 500;
+    }
+    
+    /* モーダル閉じるボタンのスタイル改善 */
+    .modal .close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: var(--text-xl);
+        transition: color 0.2s ease;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .modal .close:hover {
+        color: var(--text-primary);
+    }
+    
+    /* モーダル内のボタン */
+    .modal .apply-btn {
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        color: var(--text-light);
+        border: none;
+        padding: var(--space-2) var(--space-6);
+        border-radius: var(--radius-full);
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .modal .apply-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow);
+    }
+
+    /* モーダル余白を削減 */
+    #filterSettingsModal .modal-body,
+    #selfIntroModal .modal-body,
+    #settingsModal .modal-body {
+        padding: var(--space-2) var(--space-4);
+        max-height: none;
+    }
+    
+    #filterSettingsModal .modal-footer,
+    #selfIntroModal .modal-footer,
+    #settingsModal .modal-footer {
+        padding: var(--space-2) var(--space-4);
+    }
+
+    /* モーダル余白をさらに減らす */
+    #settingsModal .modal-header {
+        padding: var(--space-2) var(--space-3);
+    }
+    #settingsModal .modal-body {
+        padding: var(--space-2) var(--space-3);
+        max-height: none;
+    }
+    #settingsModal .modal-footer {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    /* タブコンテンツの間隔を縮小 */
+    #settingsModal .nav-tabs {
+        margin-bottom: var(--space-2);
+    }
+    #settingsModal .tab-content {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    #settingsModal .tab-pane {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    /* フォームグループのマージンを縮小 */
+    #settingsModal .form-group {
+        margin-bottom: var(--space-2) !important;
+    }
+    #settingsModal .form-group label {
+        margin-bottom: var(--space-1) !important;
+    }
+
+    /* テキストエリアや入力欄の高さを小さく */
+    #settingsModal .form-control {
+        padding: var(--space-2) !important;
+        font-size: var(--text-sm) !important;
+    }
+
+    #settingsModal .modal-body {
+        white-space: normal;
+    }
+
+    /* 設定モーダルの高さ調整 */
+    #settingsModal .modal-content {
+        max-height: none !important;
+    }
+    #settingsModal .modal-body {
+        flex: initial !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+        padding: var(--space-2) var(--space-3) !important;
+    }
+    #settingsModal .modal-header,
+    #settingsModal .modal-footer {
+        padding: var(--space-2) var(--space-3) !important;
+    }
+    /* タブ周りの余白を縮小 */
+    #settingsModal .nav-tabs {
+        margin-bottom: var(--space-2) !important;
+    }
+    #settingsModal .tab-content {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    #settingsModal .tab-pane {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    /* フォーム間隔縮小 */
+    #settingsModal .form-group {
+        margin-bottom: var(--space-2) !important;
+    }
+
+    #filterSettingsModal .modal-footer,
+    #selfIntroModal .modal-footer,
+    #settingsModal .modal-footer {
+        padding: var(--space-2) var(--space-4);
+    }
+
+    /* 設定モーダルの高さ調整を確実に適用 */
+    #settingsModal .modal-content {
+        display: block !important;
+    }
+    #settingsModal .modal-body {
+        max-height: none !important;
+        overflow-y: visible !important;
+        height: auto !important;
+    }
+
+    /* 設定モーダルのダイアログ調整 */
+    #settingsModal .modal-dialog {
+        display: block !important;
+        margin: var(--space-2) auto !important;
+        max-width: 600px !important;
+        height: auto !important;
+    }
+    /* 設定モーダルの内容部調整 */
+    #settingsModal .modal-content {
+        display: block !important;
+        max-height: none !important;
+        min-height: auto !important;
+    }
+    #settingsModal .modal-body {
+        padding: var(--space-2) var(--space-3) !important;
+        height: auto !important;
+        max-height: none !important;
+        min-height: auto !important;
+        overflow-y: visible !important;
+        flex: none !important;
+    }
+    #settingsModal .modal-header,
+    #settingsModal .modal-footer {
+        padding: var(--space-2) var(--space-3) !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* 設定モーダルのダイアログ上マージン調整 */
+    #settingsModal .modal-dialog {
+        margin: var(--space-2) auto var(--space-2) auto !important;
+    }
+
+    /* 設定モーダル高さを短くする */
+    #settingsModal .modal-dialog { margin: var(--space-2) auto !important; max-width:600px; }
+    #settingsModal .modal-content { max-height: none; overflow: visible; }
+    #settingsModal .modal-body { max-height: none; overflow-y: visible; padding: var(--space-2) var(--space-3); }
+    #settingsModal .modal-header, #settingsModal .modal-footer { padding: var(--space-2) var(--space-3); }
 </style>
 
 <div class="wrapper">
@@ -390,7 +999,10 @@
     <nav id="sidebar">
         <!-- サイドバー上部のリンクを削除 -->
         <div class="sidebar-header">
-            <h3>案件naviCHO <small style="font-size: 0.6em;">v0.6.5</small></h3>
+            <!-- ロゴ全体をリンクに変更 -->
+            <a href="#" data-toggle="modal" data-target="#settingsModal" style="color: white; text-decoration: none; display: block;">
+                <h3>案件naviCHO <small style="font-size: 0.6em;">v0.6.5</small></h3>
+            </a>
         </div>
         
         <div class="user-info">
@@ -444,7 +1056,9 @@
         
         <!-- 「設定」テキストの右側に歯車アイコンを追加 -->
         <div class="sidebar-header">
-            <h3>設定 <i class="fas fa-cog settings-icon" style="cursor: pointer;" data-toggle="modal" data-target="#settingsModal"></i></h3>
+            <a href="#" data-toggle="modal" data-target="#settingsModal" style="color: var(--text-light); text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                <h3 style="margin: 0;">設定 <i class="fas fa-cog"></i></h3>
+            </a>
         </div>
         
         <div class="form-group">
@@ -467,27 +1081,23 @@
         
         <ul class="list-unstyled components">
             <li>
-                <a href="#" class="filter-settings-link">＞ フィルター設定</a>
+                <a href="#" class="filter-settings-link">＞フィルター設定</a>
             </li>
             <li>
-                <a href="#" class="self-intro-link">＞ 自己紹介内容</a>
+                <a href="#" class="self-intro-link">＞自己紹介内容</a>
             </li>
             <li>
-                <a href="{{ url_for('job_history_page') }}">
-                    <i class="fas fa-history"></i> ＞ 案件履歴
-                </a>
+                <a href="{{ url_for('job_history_page') }}" style="font-size: 0.875rem;"><i class="fas fa-history"></i> 案件履歴</a>
             </li>
             <li>
-                <a href="#" id="clear-all-data-link" class="text-danger">
-                    <i class="fas fa-trash"></i> ＞ 全データクリア
-                </a>
+                <a href="#" id="clear-all-data-link" class="text-danger" style="font-size: 0.875rem;"><i class="fas fa-trash"></i> 全データクリア</a>
             </li>
         </ul>
         
         <!-- 更新確認リンクをサイドバー最下部に配置 -->
-        <div style="padding: 15px 20px; text-align: center; margin-top: 20px;">
-            <a href="#" id="check-update-link" style="color: #ffffff; font-size: 1.3rem; display: inline-block;">
-                <i class="fas fa-sync-alt"></i> アプリの更新確認
+        <div style="padding: 10px 20px; text-align: center;">
+            <a href="#" id="check-update-link" style="color: #555; font-size: 0.75rem; display: inline-block;">
+                アプリの更新確認
             </a>
         </div>
         
@@ -549,7 +1159,7 @@
                                     <a href="{{ job.url }}" target="_blank">{{ job.title }}</a>
                                 </td>
                                 <td class="detail-column">
-                                    <button class="btn btn-sm btn-info" 
+                                    <button class="btn btn-sm btn-info toggle-details" 
                                             data-toggle="modal" 
                                             data-target="#detailsModal"
                                             data-title="{{ job.title }}"
@@ -557,12 +1167,12 @@
                                             data-client="{{ job.client }}"
                                             data-posted-date="{{ job.posted_date }}"
                                             data-description="{{ job.detail_description }}">
-                                        詳細を表示
+                                        詳細
                                     </button>
                                 </td>
                                 <td class="budget-column">{{ job.budget }}</td>
                                 <td class="client-column">{{ job.client }}</td>
-                                <td class="date-column">{{ job.posted_date }}</td>
+                                <td class="date-column">{{ job.posted_date[:4] }}<br>{{ job.posted_date[5:] }}</td>
                                 <td class="reason-column">{{ job.gpt_reason if job.gpt_reason else '' }}</td>
                             </tr>
                             {% endfor %}
@@ -635,28 +1245,29 @@
             </div>
             <div class="modal-body">
                 <div class="job-details">
-                    <table class="table table-bordered">
-                        <tr>
-                            <th style="width: 120px;">予算</th>
-                            <td class="modal-budget"></td>
-                        </tr>
-                        <tr>
-                            <th>クライアント</th>
-                            <td class="modal-client"></td>
-                        </tr>
-                        <tr>
-                            <th>投稿日</th>
-                            <td class="modal-posted-date"></td>
-                        </tr>
-                        <tr>
-                            <th>詳細説明</th>
-                            <td class="modal-description"></td>
-                        </tr>
-                    </table>
+                    <div class="job-info-grid">
+                        <div class="job-info-item">
+                            <div class="info-label">予算</div>
+                            <div class="info-value modal-budget"></div>
+                        </div>
+                        <div class="job-info-item">
+                            <div class="info-label">クライアント</div>
+                            <div class="info-value modal-client"></div>
+                        </div>
+                        <div class="job-info-item">
+                            <div class="info-label">投稿日</div>
+                            <div class="info-value modal-posted-date"></div>
+                        </div>
+                    </div>
+                    <div class="job-description-container">
+                        <div class="info-label">詳細説明</div>
+                        <div class="modal-description info-value"></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">閉じる</button>
+                <button type="button" class="btn btn-primary apply-btn">この案件に応募</button>
             </div>
         </div>
     </div>
@@ -842,7 +1453,7 @@
                 </ul>
                 
                 <!-- タブコンテンツ -->
-                <div class="tab-content mt-3" id="settingsTabContent">
+                <div class="tab-content" id="settingsTabContent">
                     <!-- API設定タブ -->
                     <div class="tab-pane fade show active" id="api-settings" role="tabpanel" aria-labelledby="api-tab">
                         <div class="form-group">
@@ -1812,7 +2423,7 @@
                     const detailCell = document.createElement('td');
                     detailCell.className = 'detail-column';
                     const detailBtn = document.createElement('button');
-                    detailBtn.className = 'btn btn-sm btn-info';
+                    detailBtn.className = 'btn btn-sm btn-info toggle-details';
                     detailBtn.setAttribute('data-toggle', 'modal');
                     detailBtn.setAttribute('data-target', '#detailsModal');
                     detailBtn.setAttribute('data-title', job.title);
@@ -2332,7 +2943,7 @@
         });
     }
 
-    // トースト表示関数
+    // showToast関数を修正して、新しいデザインに合わせる
     function showToast(message, type) {
         console.log('showToast関数が呼び出されました:', message, type);
         
@@ -2342,10 +2953,21 @@
             document.body.removeChild(toast);
         });
         
+        // アイコンを選択
+        let icon = 'info-circle';
+        if (type === 'success') icon = 'check-circle';
+        if (type === 'error') icon = 'exclamation-circle';
+        if (type === 'warning') icon = 'exclamation-triangle';
+        
         // 新しいトーストを作成
         const toast = document.createElement('div');
         toast.className = `toast-notification ${type}`;
-        toast.innerHTML = message;
+        toast.innerHTML = `
+            <div class="toast-content">
+                <span class="toast-icon"><i class="fas fa-${icon}"></i></span>
+                <span class="toast-message">${message}</span>
+            </div>
+        `;
         document.body.appendChild(toast);
         
         // タイムアウトIDを保存するための属性を追加

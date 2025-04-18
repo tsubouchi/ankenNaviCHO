@@ -235,44 +235,36 @@ check_python_version() {
     # Pythonが存在するかチェック
     if ! command -v python3 &> /dev/null; then
         echo "Python3が見つかりません。ダウンロードを促します。"
-        DOWNLOAD_RESULT=$(/usr/bin/osascript <<EOF_DIALOG
-            display dialog "Python3が見つかりません。\\n\\nアプリケーションの実行には Python 3.11 以上が必要です。\\n\\nPython をダウンロードしますか？" buttons {"キャンセル", "ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution
-EOF_DIALOG
-        )
-        
+        DOWNLOAD_RESULT=$(/usr/bin/osascript -e 'display dialog "Python3が見つかりません。\n\nアプリケーションの実行には Python 3.11 以上が必要です。\n\nPython をダウンロードしますか？" buttons {"キャンセル","ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution')
         if [[ "$DOWNLOAD_RESULT" == *"ダウンロード"* ]]; then
-            # Pythonのダウンロードサイトを開く
             open "https://www.python.org/downloads/"
-            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\n\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
         fi
         return 1
     fi
-    
-    # Pythonのバージョンを確認
-    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
-    PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-    
-    echo "検出されたPythonバージョン: $PYTHON_VERSION"
-    
-    # バージョンが3.11以下の場合は新しいバージョンを促す
-    if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
-        echo "Pythonバージョンが古いため、新しいバージョンのダウンロードを促します。"
-        DOWNLOAD_RESULT=$(/usr/bin/osascript <<EOF_DIALOG
-            display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\\n\\nアプリケーションの実行には Python 3.11 以上が推奨されます。\\n\\nPython 3.13.3 をダウンロードしますか？" buttons {"このまま続行", "ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution
-EOF_DIALOG
-        )
-        
-        if [[ "$DOWNLOAD_RESULT" == *"ダウンロード"* ]]; then
-            # Pythonのダウンロードサイトを開く
-            open "https://www.python.org/downloads/"
-            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
-            return 1
-        fi
-        
-        echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
-    fi
-    
+
+    # バージョンチェックは不要のためコメントアウト
+    : <<'NO_VERSION_CHECK'
+    # 以下、Pythonバージョンを検証する処理を一時的に無効化
+    # PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    # PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+    # PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+    # echo "検出されたPythonバージョン: $PYTHON_VERSION"
+    # if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
+    #     echo "Pythonバージョンが古いため、新しいバージョンのダウンロードを促します。"
+    #     DOWNLOAD_RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+    #         display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\n\nアプリケーションの実行には Python 3.11 以上が推奨されます。\n\nPython 3.13.3 をダウンロードしますか？" buttons {"このまま続行", "ダウンロード"} default button "ダウンロード" with title "Python環境のセットアップ" with icon caution
+    # EOF_DIALOG
+    #     )
+    #     if [[ "$DOWNLOAD_RESULT" == *"ダウンロード"* ]]; then
+    #         open "https://www.python.org/downloads/"
+    #         /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\n\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+    #         return 1
+    #     fi
+    #     echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
+    # fi
+NO_VERSION_CHECK
+
     return 0
 }
 
@@ -285,10 +277,7 @@ fi
 
 # セットアップ済みかチェック
 if [ ! -f "$SETUP_DONE_FLAG" ]; then
-  RESULT=$(/usr/bin/osascript <<EOF_DIALOG
-    display dialog "初回セットアップが必要です。実行しますか？" buttons {"キャンセル", "実行して通知を待つ"} default button "実行して通知を待つ" with title "ankenNaviCHO セットアップ"
-EOF_DIALOG
-  )
+  RESULT=$(/usr/bin/osascript -e 'display dialog "初回セットアップが必要です。実行しますか？" buttons {"キャンセル","実行して通知を待つ"} default button "実行して通知を待つ" with title "ankenNaviCHO セットアップ" with icon caution')
 
   # キャンセルしたら終了
   if [[ "$RESULT" != *"実行"* ]]; then
@@ -340,39 +329,37 @@ check_python_version() {
     # Pythonが存在するかチェック
     if ! command -v python3 &> /dev/null; then
         echo "エラー: Python3が見つかりません。"
-        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\\n\\nPython 3.11以上をインストールしてください。\\n\\nPython 3.13.3のダウンロードページを開きますか？" buttons {"キャンセル", "ダウンロードページを開く"} default button "ダウンロードページを開く" with title "エラー" with icon stop'
+        /usr/bin/osascript -e 'display dialog "Python3が見つかりません。セットアップを実行できません。\n\nPython 3.11以上をインストールしてください。\n\nPython 3.13.3のダウンロードページを開きますか？" buttons {"キャンセル", "ダウンロードページを開く"} default button "ダウンロードページを開く" with title "エラー" with icon stop'
         if [[ $? -eq 0 ]]; then
             open "https://www.python.org/downloads/"
         fi
         return 1
     fi
-    
-    # Pythonのバージョンを確認
-    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
-    PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-    
-    echo "検出されたPythonバージョン: $PYTHON_VERSION"
-    
-    # バージョンが3.11以下の場合は警告を表示
-    if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
-        echo "警告: Pythonバージョンが推奨より古いです。"
-        RESULT=$(/usr/bin/osascript <<EOF_DIALOG
-            display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\\n\\nアプリケーションの実行には Python 3.11 以上が推奨されます。\\n\\n続行しますか？" buttons {"キャンセル", "ダウンロードページを開く", "続行"} default button "ダウンロードページを開く" with title "警告" with icon caution
-EOF_DIALOG
-        )
-        
-        if [[ "$RESULT" == *"キャンセル"* ]]; then
-            return 1
-        elif [[ "$RESULT" == *"ダウンロード"* ]]; then
-            open "https://www.python.org/downloads/"
-            /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\\n\\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
-            return 1
-        fi
-        
-        echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
-    fi
-    
+
+    # バージョンチェックは不要のためコメントアウト
+    : <<'NO_VERSION_CHECK'
+    # 以下、Pythonバージョンを検証する処理を一時的に無効化
+    # PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    # PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+    # PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+    # echo "検出されたPythonバージョン: $PYTHON_VERSION"
+    # if [ "$PYTHON_MAJOR_VERSION" -lt 3 ] || ([ "$PYTHON_MAJOR_VERSION" -eq 3 ] && [ "$PYTHON_MINOR_VERSION" -le 11 ]); then
+    #     echo "警告: Pythonバージョンが推奨より古いです。"
+    #     RESULT=$(/usr/bin/osascript <<EOF_DIALOG
+    #         display dialog "検出されたPythonバージョン ($PYTHON_VERSION) は古いバージョンです。\n\nアプリケーションの実行には Python 3.11 以上が推奨されます。\n\n続行しますか？" buttons {"キャンセル", "ダウンロードページを開く", "続行"} default button "ダウンロードページを開く" with title "警告" with icon caution
+    # EOF_DIALOG
+    #     )
+    #     if [[ "$RESULT" == *"キャンセル"* ]]; then
+    #         return 1
+    #     elif [[ "$RESULT" == *"ダウンロード"* ]]; then
+    #         open "https://www.python.org/downloads/"
+    #         /usr/bin/osascript -e 'display dialog "ダウンロードが完了したら、インストーラを実行してPythonをインストールしてください。\n\nインストール完了後、アプリケーションを再度起動してください。" buttons {"OK"} default button "OK" with title "Python環境のセットアップ"'
+    #         return 1
+    #     fi
+    #     echo "ユーザーが古いバージョンのPythonでの続行を選択しました。"
+    # fi
+NO_VERSION_CHECK
+
     return 0
 }
 

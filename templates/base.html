@@ -3,7 +3,50 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='images/crowdworks_logo.png') }}" type="image/png">
     {{ bootstrap.load_css() }}
+    <!-- 設定モーダルの余白・高さを上書き -->
+    <style>
+        #settingsModal .modal-dialog {
+            margin: var(--space-2, 8px) auto !important;
+            max-width: 600px !important;
+        }
+        #settingsModal .modal-content {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+        #settingsModal .modal-header,
+        #settingsModal .modal-footer {
+            padding: 4px 8px !important;
+        }
+        #settingsModal .modal-body {
+            padding: 4px 8px !important;
+            max-height: none !important;
+            overflow-y: visible !important;
+        }
+        #settingsModal .nav-tabs {
+            margin-bottom: 0 !important;
+            border-bottom: none !important;
+        }
+        #settingsModal .nav-link {
+            padding: 4px 12px !important;
+        }
+        #settingsModal .tab-content {
+            padding: 0 !important;
+            border: none !important;
+        }
+        #settingsModal .form-group {
+            margin-bottom: 4px !important;
+        }
+        #settingsModal .form-control {
+            padding: 4px 8px !important;
+            font-size: 0.875rem !important;
+        }
+        .alert {
+            color: var(--text-primary) !important;
+        }
+    </style>
     <title>{% block title %}案件検索ツール{% endblock %}</title>
     
     <!-- beforeunloadによるサーバーシャットダウン処理 -->
