@@ -2,6 +2,7 @@
 /.env
 /crawled_data/
 /__pycache__/
+/test_patch/
 /logs/
 /backups/
 /venv/
