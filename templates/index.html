@@ -1001,7 +1001,7 @@
         <div class="sidebar-header">
             <!-- ロゴ全体をリンクに変更 -->
             <a href="#" data-toggle="modal" data-target="#settingsModal" style="color: white; text-decoration: none; display: block;">
-                <h3>案件naviCHO <small style="font-size: 0.6em;">v0.6.5</small></h3>
+                <h3>案件naviCHO <small style="font-size: 0.6em;">v0.6.6</small></h3>
             </a>
         </div>
         
@@ -1132,7 +1132,7 @@
             <div class="view-container active" id="jobs-view">
                 <h2 class="mb-4">クラウドワークス案件一覧</h2>
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped">
                         <thead class="thead-dark">
                             <tr>
                                 <th class="check-column">応募</th>
@@ -1166,7 +1166,8 @@
                                             data-budget="{{ job.budget }}"
                                             data-client="{{ job.client }}"
                                             data-posted-date="{{ job.posted_date }}"
-                                            data-description="{{ job.detail_description }}">
+                                            data-description="{{ job.detail_description }}"
+                                            data-url="{{ job.url }}">
                                         詳細
                                     </button>
                                 </td>
@@ -2431,6 +2432,7 @@
                     detailBtn.setAttribute('data-client', job.client);
                     detailBtn.setAttribute('data-posted-date', job.posted_date);
                     detailBtn.setAttribute('data-description', job.detail_description || '');
+                    detailBtn.setAttribute('data-url', job.url);
                     detailBtn.textContent = '詳細を表示';
                     detailCell.appendChild(detailBtn);
                     row.appendChild(detailCell);
@@ -2471,6 +2473,7 @@
                         const client = button.data('client');
                         const postedDate = button.data('posted-date');
                         const description = button.data('description');
+                        const url = button.data('url');
                         
                         const modal = $(this);
                         modal.find('.modal-title').text(title);
@@ -2684,6 +2687,7 @@
                 const client = button.data('client');
                 const postedDate = button.data('posted-date');
                 const description = button.data('description');
+                const url = button.data('url');
                 
                 // モーダル内の要素に情報を設定
                 const modal = $(this);
@@ -2692,6 +2696,17 @@
                 modal.find('.modal-client').text(client || '-');
                 modal.find('.modal-posted-date').text(postedDate || '-');
                 modal.find('.modal-description').html(description || '詳細情報がありません');
+                
+                // 応募ボタンにURLを設定
+                modal.find('.apply-btn').attr('data-url', url);
+            });
+            
+            // 応募ボタンのクリックイベントを設定
+            $('#detailsModal .apply-btn').on('click', function() {
+                const url = $(this).attr('data-url');
+                if (url) {
+                    window.open(url, '_blank');
+                }
             });
         }
 
@@ -2711,6 +2726,7 @@
                     const client = e.target.getAttribute('data-client');
                     const postedDate = e.target.getAttribute('data-posted-date');
                     const description = e.target.getAttribute('data-description');
+                    const url = e.target.getAttribute('data-url');
                     
                     // モーダル内の要素に情報を設定
                     detailsModal.querySelector('.modal-title').textContent = title || '';
@@ -2718,6 +2734,20 @@
                     detailsModal.querySelector('.modal-client').textContent = client || '-';
                     detailsModal.querySelector('.modal-posted-date').textContent = postedDate || '-';
                     detailsModal.querySelector('.modal-description').innerHTML = description || '詳細情報がありません';
+                    
+                    // 応募ボタンにURLを設定
+                    const applyBtn = detailsModal.querySelector('.apply-btn');
+                    if (applyBtn) {
+                        applyBtn.setAttribute('data-url', url);
+                        
+                        // 応募ボタンのクリックイベントを設定
+                        applyBtn.onclick = function() {
+                            const jobUrl = this.getAttribute('data-url');
+                            if (jobUrl) {
+                                window.open(jobUrl, '_blank');
+                            }
+                        };
+                    }
                     
                     // モーダルを表示
                     detailsModal.style.display = 'block';
@@ -3041,9 +3071,10 @@ $(document).ready(function() {
     // タブ閉じる前のアラート
     window.addEventListener('beforeunload', function(e) {
         console.log("beforeunloadイベントが発生しました");
-        const message = 'サーバーは終了しないので、アプリは裏で動いています。URLに接続すれば、いつでもこの画面に戻れます。';
-        e.returnValue = message; // Chrome では必要
-        return message; // 古いブラウザでの対応
+        // ダイアログを表示したくない場合はここでreturnだけして、e.returnValueは設定しない
+        // const message = 'サーバーは終了しないので、アプリは裏で動いています。URLに接続すれば、いつでもこの画面に戻れます。';
+        // e.returnValue = message; // Chrome では必要
+        // return message; // 古いブラウザでの対応
     });
 });
 </script>
