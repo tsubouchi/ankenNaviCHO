@@ -240,7 +240,7 @@ def run_app():
     if is_port_in_use(port):
         logger.info(f"ポート {port} は既に使用中です。アプリケーションは既に実行中です。")
         # macOSダイアログでユーザーに通知
-        url = f"http://localhost:{port}"
+        url = f"http://localhost:{port}/login"
         message = f"アプリケーションは既に実行中です。\n\nURL: {url}"
         cmd = [
             'osascript', 
@@ -292,7 +292,7 @@ def run_app():
     if wait_for_port(port, timeout=15):
         logger.info(f"サーバーが起動しました（ポート: {port}）")
         # ブラウザでアプリケーションを開く
-        url = f"http://localhost:{port}"
+        url = f"http://localhost:{port}/login"
         logger.info(f"ブラウザでアプリケーションを開きます: {url}")
         webbrowser.open(url)
     else:
