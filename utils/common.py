@@ -100,6 +100,10 @@ def load_settings() -> Dict[str, Any]:
             settings["filter_prompt"] = prompt_conf.get("prompt", "")
     except Exception as exc:
         logger.error("prompt.txt 読み込み失敗: %s", exc)
+    # 環境変数優先でAPIキーを上書き
+    env_openai = os.getenv("OPENAI_API_KEY")
+    if env_openai:
+        settings["api_key"] = env_openai
     return settings
 
 

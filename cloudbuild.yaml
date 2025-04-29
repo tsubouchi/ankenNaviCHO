@@ -19,8 +19,8 @@ steps:
       - '--platform=managed'
       - '--memory=1Gi'
       - '--allow-unauthenticated'
-      - '--set-env-vars=SKIP_NODE_SERVER=true,FLASK_ENV=production'
-      - '--add-secrets=FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest'
+      - '--set-env-vars=SKIP_NODE_SERVER=true,FASTAPI_ENV=production'
+      - '--add-secrets=FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest'
 
 images:
   - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest' 

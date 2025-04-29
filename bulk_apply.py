@@ -8,7 +8,8 @@ from queue import Queue
 from threading import Thread
 import sys
 
-from flask import Flask, Response, jsonify, request, stream_with_context
+from fastapi import APIRouter, Request, BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse, JSONResponse
 from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -68,12 +69,12 @@ def handle_error(e, error_type="一般エラー", user_message=None, status_code
             user_message = "エラーが発生しました。"
     
     # JSONレスポンスを返す
-    return jsonify({
+    return JSONResponse(status_code=status_code, content={
         'status': 'error',
         'error_type': error_type,
         'message': user_message,
         'detail': str(e)
-    }), status_code
+    })
 
 # グローバル変数で進捗状況を管理
 progress_queue = Queue()
@@ -458,117 +459,58 @@ def init_bulk_apply():
     """一括応募機能の初期化"""
     create_self_introduction()
     
-# Flaskルート関数（app.pyに統合予定）
-def register_bulk_apply_routes(app: Flask):
-    @app.route('/bulk_apply', methods=['POST'])
-    def bulk_apply():
+# APIRouter インスタンス
+router = APIRouter()
+
+# 後方互換のため Flask スタイルの handle_error を変換
+def _json_error(message: str, status_code: int = 500):
+    return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
+
+# 既存 handle_error を薄いラッパーで置き換え
+def handle_error(e: Exception, error_type="一般エラー", user_message=None, status_code=500):
+    logger.error(f"{error_type}: {e}")
+    return _json_error(user_message or str(e), status_code)
+
+# FastAPI 用エンドポイント
+@router.post("/bulk_apply")
+async def bulk_apply_endpoint(request: Request, background_tasks: BackgroundTasks):
+    try:
+        data = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON") from exc
+
+    urls = data.get("urls", []) if isinstance(data, dict) else []
+    if not urls:
+        raise HTTPException(status_code=400, detail="urls is required")
+
+    # URL形式チェック
+    if any(not url.startswith("http") for url in urls):
+        raise HTTPException(status_code=400, detail="Invalid URL in list")
+
+    # スレッドで開始
+    background_tasks.add_task(bulk_apply_process, urls)
+    logger.info("Bulk apply process started: %s urls", len(urls))
+    return {"status": "success", "message": "bulk apply started", "count": len(urls)}
+
+
+@router.get("/bulk_apply_progress")
+async def bulk_apply_progress_endpoint():
+    def event_stream():
         try:
-            # リクエストデータの取得
-            try:
-                data = request.get_json()
-                if not data:
-                    return handle_error(
-                        Exception("リクエストデータが空です"),
-                        error_type="リクエストエラー",
-                        user_message="リクエストデータが空です。応募するURLを指定してください。",
-                        status_code=400
-                    )
-            except Exception as e:
-                return handle_error(
-                    e,
-                    error_type="リクエストエラー",
-                    user_message="リクエストの解析に失敗しました。正しいJSON形式で送信してください。",
-                    status_code=400
-                )
-            
-            # URLリストの取得
-            urls = data.get('urls', [])
-            if not urls:
-                return handle_error(
-                    Exception("応募するURLが指定されていません"),
-                    error_type="パラメータエラー",
-                    user_message="応募する案件が選択されていません。少なくとも1つの案件を選択してください。",
-                    status_code=400
-                )
-            
-            # URLの形式チェック
-            invalid_urls = [url for url in urls if not url.startswith('http')]
-            if invalid_urls:
-                return handle_error(
-                    Exception(f"無効なURL形式: {invalid_urls[:3]}..."),
-                    error_type="パラメータエラー",
-                    user_message="無効なURL形式が含まれています。すべてのURLが正しい形式であることを確認してください。",
-                    status_code=400
-                )
-            
-            # 別スレッドで処理を開始
-            try:
-                Thread(target=bulk_apply_process, args=(urls,), daemon=True).start()
-                logger.info(f"一括応募プロセスを開始: {len(urls)}件の案件")
-            except Exception as e:
-                return handle_error(
-                    e,
-                    error_type="スレッド起動エラー",
-                    user_message="一括応募プロセスの起動に失敗しました。",
-                    status_code=500
-                )
-            
-            # 成功レスポンス
-            return jsonify({
-                'status': 'success',
-                'message': '一括応募を開始しました',
-                'count': len(urls)
-            })
-            
-        except Exception as e:
-            return handle_error(
-                e,
-                error_type="一括応募エラー",
-                user_message="一括応募の開始中に予期しないエラーが発生しました。",
-                status_code=500
-            )
-    
-    @app.route('/bulk_apply_progress')
-    def bulk_apply_progress():
-        def generate():
-            try:
-                while True:
-                    try:
-                        # キューからデータを取得（タイムアウト付き）
-                        progress = progress_queue.get(timeout=60)
-                        yield f"data: {json.dumps(progress)}\n\n"
-                        if progress["completed"]:
-                            break
-                    except Queue.Empty:
-                        # タイムアウトした場合はエラーメッセージを送信
-                        error_data = {
-                            "status": "error",
-                            "message": "データ取得がタイムアウトしました",
-                            "completed": True
-                        }
-                        yield f"data: {json.dumps(error_data)}\n\n"
-                        logger.error("進捗データの取得がタイムアウトしました")
+            while True:
+                try:
+                    progress = progress_queue.get(timeout=60)
+                    yield f"data: {json.dumps(progress, ensure_ascii=False)}\n\n"
+                    if progress.get("completed"):
                         break
-            except Exception as e:
-                # 例外が発生した場合はエラーメッセージを送信
-                error_data = {
-                    "status": "error",
-                    "message": f"エラーが発生しました: {str(e)}",
-                    "completed": True
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                logger.error(f"進捗データの生成中にエラーが発生: {str(e)}")
-        
-        try:
-            return Response(
-                stream_with_context(generate()),
-                mimetype='text/event-stream'
-            )
-        except Exception as e:
-            logger.error(f"SSEレスポンスの作成に失敗: {str(e)}")
-            return handle_error(
-                e,
-                error_type="ストリーミングエラー",
-                user_message="進捗状況のストリーミングに失敗しました。",
-                status_code=500
-            )
+                except Exception:
+                    yield "data: {\"status\":\"timeout\"}\n\n"
+                    break
+        except Exception as exc:
+            yield f"data: {{\"status\":\"error\", \"message\": \"{str(exc)}\"}}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+# 旧 Flask 互換関数を保持（削除可）
+def get_router():
+    return router

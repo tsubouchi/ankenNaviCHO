@@ -4,7 +4,8 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    SKIP_NODE_SERVER=true
+    SKIP_NODE_SERVER=true \
+    APP_DATA_DIR=/tmp/app-data
 
 # 必要なシステムパッケージ & Google Chrome（ヘッドレス用）
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,4 +41,6 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Uvicorn(ASGI)で起動
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"] 
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+
+RUN mkdir -p "$APP_DATA_DIR/crawled_data" "$APP_DATA_DIR/logs" "$APP_DATA_DIR/drivers" 

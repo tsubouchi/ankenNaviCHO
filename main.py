@@ -33,6 +33,7 @@ from utils.job_history import (
 )
 import chromedriver_manager
 from updater import check_for_updates, perform_update, get_update_status
+from bulk_apply import get_router
 
 # ------------------------------------------------------------
 # FastAPI インスタンス作成
@@ -144,6 +145,12 @@ async def top(request: Request, user_info: Dict[str, Any] = Depends(get_current_
     """トップページ表示 (認証必須)"""
     context = {"request": request, "user": user_info, "settings": load_settings()}
     return templates.TemplateResponse("top.html", context)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login(request: Request):
+    """ログインページ表示"""
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 # ------------------------------------------------------------
@@ -365,4 +372,6 @@ async def chromedriver_update_api(payload: ChromeUpdatePayload | None = None):
 @app.get("/chromedriver_error", response_class=HTMLResponse)
 async def chromedriver_error(request: Request, message: str = "ChromeDriver error"):
     context = {"request": request, "error_message": message}
-    return templates.TemplateResponse("error.html", context) 
+    return templates.TemplateResponse("error.html", context)
+
+app.include_router(get_router(), prefix="/api") 
