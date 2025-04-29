@@ -58,3 +58,4 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+anken-navicho-firebaseadminsdk*.json
