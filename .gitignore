@@ -59,3 +59,16 @@ __pycache__/
 .coverage
 htmlcov/
 anken-navicho-firebaseadminsdk*.json
+# ========================
+# Local / build artifacts
+.venv/
+dist/
+*.zip
+*.DS_Store
+__pycache__/
+# PyInstaller build
+build/
+# macOS app bundle
+*.app/
+# Logs
+*.log
