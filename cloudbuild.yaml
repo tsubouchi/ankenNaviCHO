@@ -1,0 +1,26 @@
+steps:
+  # 1. Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest', '.']
+
+  # 2. Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest']
+
+  # 3. Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'anken-navi'
+      - '--image=asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest'
+      - '--region=asia-northeast1'
+      - '--platform=managed'
+      - '--memory=1Gi'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=SKIP_NODE_SERVER=true,FLASK_ENV=production'
+      - '--add-secrets=FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest'
+
+images:
+  - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest' 

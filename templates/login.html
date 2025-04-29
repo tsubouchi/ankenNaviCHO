@@ -90,41 +90,61 @@
         {% endwith %}
 
         <!-- Googleログインボタン -->
-        <a href="{{ url_for('login_with_google') }}" class="login-btn" onclick="window.__skipBeforeUnload=true;">
+        <button id="signin" class="login-btn">
             <img src="https://www.google.com/favicon.ico" alt="Google" class="google-icon">
             Googleでログイン
-        </a>
+        </button>
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // URLハッシュからトークンを取得
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            if (accessToken) {
-                // トークンをサーバーに送信
-                fetch('/auth/callback?access_token=' + encodeURIComponent(accessToken), {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                })
-                .then(response => response.text())
-                .then(result => {
-                    // OAuthリダイレクト/リロード時はbeforeunloadのsendBeaconをスキップ
-                    window.__skipBeforeUnload = true;
-                    // リダイレクトされた場合は新しいURLに移動
-                    if (result.includes('redirect')) {
-                        window.location.href = '/';
-                    } else {
-                        window.location.reload();
-                    }
-                })
-                .catch(error => {
-                    console.error('認証エラー:', error);
-                });
+<!-- Firebase SDK -->
+<script type="module">
+    // Firebase SDKのインポート
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    // Firebase設定
+    const firebaseConfig = {
+        apiKey: "AIzaSyBIN6u28k3DPKz0_CqDUHCliuJTsb5QFYo",
+        authDomain: "anken-navicho.firebaseapp.com",
+        projectId: "anken-navicho",
+    };
+
+    // Firebaseの初期化
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    // ログインボタンのクリックイベント
+    document.getElementById('signin').addEventListener('click', async () => {
+        try {
+            // Google認証ポップアップを表示
+            const result = await signInWithPopup(auth, provider);
+            
+            // 認証成功後、IDトークンを取得
+            const idToken = await result.user.getIdToken();
+            
+            // IDトークンをサーバーに送信
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ idToken })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // 認証成功 - トップページへリダイレクト
+                window.location.href = '/top';
+            } else {
+                // エラーメッセージを表示
+                alert('ログインエラー: ' + data.message);
             }
+        } catch (error) {
+            console.error('Firebase認証エラー:', error);
+            alert('ログインに失敗しました。もう一度お試しください。');
         }
     });
 </script>

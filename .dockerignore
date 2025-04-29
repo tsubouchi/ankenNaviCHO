@@ -1,0 +1,32 @@
+# Python関連
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.Python
+
+# 仮想環境
+.venv/
+venv/
+ENV/
+
+# Git
+.git
+.gitignore
+
+# macOS
+.DS_Store
+
+# Build
+build/
+dist/
+*.egg-info
+
+# Node
+node_modules/
+
+# その他
+*.log
+temp_icons/
+Downloads/ 
