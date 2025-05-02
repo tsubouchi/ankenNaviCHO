@@ -5,7 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     SKIP_NODE_SERVER=true \
-    APP_DATA_DIR=/tmp/app-data
+    APP_DATA_DIR=/tmp/app-data \
+    SKIP_CHROME_SETUP=false \
+    SKIP_UPDATES=false \
+    PORT=8080
 
 # 必要なシステムパッケージ & Google Chrome（ヘッドレス用）
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,10 +40,13 @@ RUN pip install --upgrade pip && \
 COPY . /app
 
 # Cloud RunではPORT環境変数が自動付与される
-ENV PORT=8080
 EXPOSE 8080
 
-# Uvicorn(ASGI)で起動
-CMD ["sh", "-c", "PYTHONUNBUFFERED=1 uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug"]
+# シークレットマウント用ディレクトリ作成
+RUN mkdir -p /secrets
 
-RUN mkdir -p "$APP_DATA_DIR/crawled_data" "$APP_DATA_DIR/logs" "$APP_DATA_DIR/drivers" 
+# データディレクトリ作成（クローリングデータ、ログ、ドライバー）
+RUN mkdir -p "$APP_DATA_DIR/crawled_data" "$APP_DATA_DIR/logs" "$APP_DATA_DIR/drivers"
+
+# Uvicorn(ASGI)で起動 - デバッグオプション追加
+CMD ["sh", "-c", "echo 'Starting app on port ${PORT}' && PYTHONUNBUFFERED=1 uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug --timeout-keep-alive 75"] 
