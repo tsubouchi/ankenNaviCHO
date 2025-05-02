@@ -72,3 +72,7 @@ build/
 *.app/
 # Logs
 *.log
+
+# Firebase認証情報
+*firebase*.json
+*-firebase-*.json

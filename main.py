@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import subprocess, sys, glob, time
 from datetime import datetime
+import logging
+import json
+import firebase_admin
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
@@ -35,10 +39,34 @@ import chromedriver_manager
 from updater import check_for_updates, perform_update, get_update_status
 from bulk_apply import get_router
 
+# デバッグログ設定（コンテナ起動問題のトラブルシューティング用）
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("anken-navi")
+
+# アプリケーション初期化前のログ
+logger.info(f"Starting application. Environment: {os.environ.get('FASTAPI_ENV', 'development')}")
+logger.info(f"FIREBASE_SERVICE_ACCOUNT_JSON exists: {os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON') is not None}")
+logger.info(f"OPENAI_API_KEY exists: {os.environ.get('OPENAI_API_KEY') is not None}")
+logger.info(f"APP_DATA_DIR: {os.environ.get('APP_DATA_DIR', 'not set')}")
+
 # ------------------------------------------------------------
-# FastAPI インスタンス作成
+# FastAPI アプリケーション
 # ------------------------------------------------------------
-app = FastAPI(title="案件naviCHO", version="0.1.0")
+
+# アプリケーション設定の前に追加ロギング
+logger.info("Initializing FastAPI application...")
+
+# FastAPIアプリケーション初期化
+app = FastAPI(
+    title="案件ナビ", 
+    description="案件管理アプリケーション",
+    version="1.0.0",
+    lifespan=lifespan,  # LifeSpan管理を接続
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -46,37 +74,57 @@ BASE_DIR = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-
 # ------------------------------------------------------------
 # ライフサイクルイベント
 # ------------------------------------------------------------
-@app.on_event("startup")
-async def startup_event() -> None:  # pragma: no cover
-    """アプリケーション起動時に環境初期化を実行"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 起動時
+    logger.info("Application startup: initializing components")
+    
+    # ヘルスチェック用の基本設定のみ初期化
     try:
+        # 基本的な初期化だけ行う
+        logger.info("Basic initialization only for startup")
         initialize_app_environment()
-        # ChromeDriver 自動管理
+    except Exception as e:
+        logger.error(f"Error during basic initialization: {e}")
+    
+    # バックグラウンドサービスは別タスクで遅延起動（ヘルスチェック通過後に初期化）
+    @app.on_event("startup")
+    async def startup_background_services():
+        logger.info("Delayed startup of background services")
         try:
-            driver_path = chromedriver_manager.setup_driver()
-            if driver_path:
-                logger.info("ChromeDriver setup: %s", driver_path)
-            chromedriver_manager.start_background_update()
-            logger.info("ChromeDriver background update started")
-        except Exception as exc:
-            logger.error("ChromeDriver init failed: %s", exc)
-        logger.info("アプリケーション環境の初期化完了")
-    except Exception as exc:
-        logger.error("環境初期化失敗: %s", exc)
-        raise
-
-# shutdown event
-@app.on_event("shutdown")
-async def shutdown_event() -> None:  # pragma: no cover
+            # データディレクトリの準備
+            app_paths = get_app_paths()
+            logger.info(f"Using app data directory: {app_paths['data_dir']}")
+            
+            # バックグラウンドサービス起動
+            if not os.environ.get("SKIP_CHROME_SETUP", ""):
+                logger.info("Setting up ChromeDriver")
+                chromedriver_manager.setup_driver()
+            
+            if not os.environ.get("SKIP_UPDATES", ""):
+                logger.info("Starting background update checker")
+                start_background_update()
+                
+            logger.info("All background services started successfully")
+        except Exception as e:
+            logger.error(f"Error starting background services: {e}")
+    
+    # LifeSpan管理を続行
+    yield
+    
+    # 終了時
+    logger.info("Application shutdown: cleaning up")
     try:
-        chromedriver_manager.stop_background_update()
-        logger.info("ChromeDriver background update stopped")
-    except Exception as exc:
-        logger.warning("ChromeDriver stop error: %s", exc)
+        stop_background_update()
+        logger.info("Background update checker stopped")
+        
+        chromedriver_manager.cleanup()
+        logger.info("ChromeDriver cleaned up")
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
 
 
 # ------------------------------------------------------------
@@ -131,6 +179,8 @@ class FetchNewDataPayload(BaseModel):
 
 @app.get("/health", response_class=JSONResponse)
 async def health() -> Dict[str, str]:
+    """ヘルスチェックエンドポイント"""
+    logger.info("Health check endpoint called")
     return {"status": "ok"}
 
 
@@ -374,4 +424,50 @@ async def chromedriver_error(request: Request, message: str = "ChromeDriver erro
     context = {"request": request, "error_message": message}
     return templates.TemplateResponse("error.html", context)
 
-app.include_router(get_router(), prefix="/api") 
+app.include_router(get_router(), prefix="/api")
+
+async def get_firebase_app():
+    """Firebase アプリを初期化して返す"""
+    try:
+        logger.info("Initializing Firebase App...")
+        # Secret Managerシークレットのパスを確認
+        firebase_json_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+        
+        # Cloud Runでのシークレットマウント確認
+        if firebase_json_path:
+            logger.info(f"Using Firebase credentials from environment variable")
+            try:
+                # 環境変数から直接JSONとして読み込む試行
+                creds = json.loads(firebase_json_path)
+                logger.info("Successfully parsed Firebase JSON from environment")
+            except json.JSONDecodeError:
+                # 環境変数がJSONではない場合はファイルパスとして扱う
+                logger.info(f"Treating as file path: {firebase_json_path}")
+                if os.path.exists(firebase_json_path):
+                    with open(firebase_json_path, 'r') as f:
+                        creds = json.load(f)
+                else:
+                    logger.error(f"Firebase credentials file not found at {firebase_json_path}")
+                    # Fallback to default file search
+                    firebase_json_path = None
+        
+        if not firebase_json_path:
+            # ローカル開発用にファイルを検索
+            logger.info("Searching for Firebase credentials file...")
+            firebase_files = glob.glob("*firebase*.json")
+            if firebase_files:
+                firebase_json_path = firebase_files[0]
+                logger.info(f"Found Firebase credentials file: {firebase_json_path}")
+                with open(firebase_json_path, 'r') as f:
+                    creds = json.load(f)
+            else:
+                logger.error("No Firebase credentials file found")
+                raise HTTPException(status_code=500, detail="Firebase credentials not available")
+        
+        # 認証情報を使用してFirebaseアプリを初期化
+        app = firebase_admin.initialize_app(firebase_admin.credentials.Certificate(creds))
+        logger.info("Firebase App initialized successfully")
+        return app
+    except Exception as e:
+        logger.error(f"Error initializing Firebase: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Firebase initialization error: {str(e)}") 

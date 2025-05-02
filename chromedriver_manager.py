@@ -420,4 +420,30 @@ def start_background_update():
 
 def stop_background_update():
     """バックグラウンド更新を停止"""
-    get_instance().stop_background_update() 
+    get_instance().stop_background_update()
+
+def get_selenium_options():
+    """Seleniumのオプションを設定"""
+    from selenium.webdriver.chrome.options import Options
+    
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-gpu')
+    
+    # Cloud Run環境ではより制限されたオプションを追加
+    if os.environ.get('FASTAPI_ENV') == 'production':
+        options.add_argument('--disable-software-rasterizer')
+        options.add_argument('--disable-extensions')
+        options.add_argument('--single-process')  # シングルプロセスモード
+        options.add_argument('--remote-debugging-port=9222')
+        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument('--disable-dev-tools')
+        options.add_argument('--disable-logging')
+        options.add_argument('--disable-breakpad')
+        
+    # ログ出力
+    logging.getLogger('chromedriver_manager').info('Chrome options configured')
+    
+    return options 

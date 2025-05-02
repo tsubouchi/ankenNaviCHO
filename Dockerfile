@@ -41,6 +41,6 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Uvicorn(ASGI)で起動
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "PYTHONUNBUFFERED=1 uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug"]
 
 RUN mkdir -p "$APP_DATA_DIR/crawled_data" "$APP_DATA_DIR/logs" "$APP_DATA_DIR/drivers" 
