@@ -30,7 +30,6 @@ steps:
       - '--execution-environment=gen2'
       - '--ingress=all'
       - '--vpc-egress=all'
-      - '--service-account=anken-navi@anken-navicho.iam.gserviceaccount.com'
 
 images:
   - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest' 
