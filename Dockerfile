@@ -9,10 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_DATA_DIR=/tmp/app-data \
     SKIP_CHROME_SETUP=false \
     SKIP_UPDATES=false \
-    PORT=8080
+    PORT=8080 \
+    DEBIAN_FRONTEND=noninteractive
 
 # 必要なシステムパッケージ & Google Chrome（ヘッドレス用）
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    apt-utils \
     build-essential curl wget gnupg \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 \
