@@ -10,6 +10,8 @@ import os
 import logging
 from datetime import datetime
 from typing import Any, Dict
+import fcntl
+from contextlib import contextmanager
 
 from fix_settings_patch import get_app_paths  # 既存ユーティリティを再利用
 
@@ -138,13 +140,24 @@ def _init_firebase() -> None:
     global _firebase_initialized
     if _firebase_initialized:
         return
-    cred_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+    env_value = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    cred_path: str | None = None
+
+    if env_value and env_value.strip().startswith("{"):
+        # シークレットが "json" 文字列として渡ってくるケース
+        tmp_path = "/tmp/firebase_cred.json"
+        Path(tmp_path).write_text(env_value)
+        cred_path = tmp_path
+    elif env_value:
+        cred_path = env_value  # 既にパス
+
     if not cred_path:
-        # Cloud Run Secret Mgr では /secrets/FIREBASE_SERVICE_ACCOUNT_JSON にマウントされる想定
         default_path = "/secrets/FIREBASE_SERVICE_ACCOUNT_JSON"
         cred_path = default_path if Path(default_path).exists() else None
+
     if not cred_path:
         raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON パスが設定されていません")
+
     cred = credentials.Certificate(cred_path)
     initialize_app(cred)
     _firebase_initialized = True
@@ -158,4 +171,34 @@ def verify_firebase_token(id_token: str):
         return decoded  # dict 形式
     except Exception as exc:
         logger.warning("Firebase トークン検証失敗: %s", exc)
-        return None 
+        return None
+
+
+# ------------------------------------------------------------
+# ファイルロックユーティリティ
+# ------------------------------------------------------------
+@contextmanager
+def acquire_app_lock(lock_path: Path | None = None):
+    """アプリケーション用の排他ロックファイルを取得するコンテキストマネージャ
+
+    Cloud Run / Docker で複数プロセスが同一ボリュームを操作する際の競合対策。
+    同じコンテナ内で多重起動しても 2 つ目以降は BlockingIOError を送出します。
+    """
+
+    if lock_path is None:
+        lock_path = app_paths["data_dir"] / "anken_navi.lock"
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # ファイルを作成 (存在しなくても OK)
+    lock_file = lock_path.open("a+")
+    try:
+        # ノンブロッキングで排他ロック取得
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield lock_file
+    finally:
+        # ロック解除
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+        except Exception:
+            pass
+        lock_file.close() 

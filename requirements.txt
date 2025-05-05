@@ -19,3 +19,6 @@ firebase-admin==6.4.0
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
 supabase==1.2.0
+pytest==8.1.1
+pytest-asyncio==0.23.6
+httpx==0.24.1

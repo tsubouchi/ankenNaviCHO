@@ -74,5 +74,7 @@ build/
 *.log
 
 # Firebase認証情報
-*firebase*.json
-*-firebase-*.json
+# Firebase 認証鍵 (公開禁止)
+firebase*.json
+*firebase-adminsdk*.json
+*serviceAccount*.json

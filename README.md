@@ -92,6 +92,16 @@ Cloud Build を使用して自動的にデプロイされます (`cloudbuild.yam
     ```
     ビルド、イメージプッシュ、Cloud Run へのデプロイが自動で行われます。完了後、Cloud Run サービスの URL が表示されます。
 
+3.  **Health チェック確認:**
+    ```bash
+    SERVICE_URL=$(gcloud run services describe anken-navi \
+      --region=asia-northeast1 --format='value(status.url)')
+
+    # /health エンドポイントへリクエスト
+    curl -w '\n' "$SERVICE_URL/health"   # → {"status":"ok"}
+    ```
+    `{"status":"ok"}` が返ればコンテナが正常に起動しています。
+
 ### クロスプロジェクト利用時の注意
 (省略 - 詳細は `README.md` 旧版または `TODO.md` 参照)
 
@@ -193,3 +203,15 @@ Cloud Run へビルド／デプロイする際に発生し得る **環境変数�
 - `get_app_paths()` が `/tmp/app-data` を認識しないため、将来的に **環境変数を優先する実装** へ統合すると保守しやすい  
 - Chrome / ChromeDriver の **バージョン不整合** は依然リスク。build 時に固定バージョンを取得する方式へ移行を検討  
 - Cloud Build の **リージョン** (`asia-northeast1`) を変更する場合は Docker イメージパスも同期させること
+
+### ローカルユニットテスト
+
+```bash
+# 依存パッケージ (pytest 等) インストール
+pip install -r requirements.txt
+
+# すべてのテスト実行
+pytest -q
+```
+
+`tests/test_health.py` では `/health` エンドポイントが 200 かつ `{"status": "ok"}` を返すことを確認しています。

@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 from utils.common import (
     initialize_app_environment,
@@ -26,6 +27,7 @@ from utils.common import (
     load_settings,
     logger,
     save_settings,
+    acquire_app_lock,
 )
 from utils.job_history import (
     load_filtered_json,
@@ -74,6 +76,14 @@ async def lifespan(app: FastAPI):
     # バックグラウンドサービスは別タスクで遅延起動（ヘルスチェック通過後に初期化）
     @app.on_event("startup")
     async def startup_background_services():
+        # ロックファイル取得で多重起動を防止
+        try:
+            acquire_app_lock().__enter__()
+        except BlockingIOError:
+            logger.warning("Another instance is already running, shutdown.")
+            import sys
+            sys.exit(0)
+        
         logger.info("Delayed startup of background services")
         try:
             # データディレクトリの準備
@@ -194,14 +204,14 @@ async def health() -> Dict[str, str]:
 
 @app.get("/", response_class=RedirectResponse, status_code=302)
 async def index() -> RedirectResponse:
-    """トップページへリダイレクト"""
-    return RedirectResponse(url="/top")
+    """ルートアクセス時はログインページへリダイレクト"""
+    return RedirectResponse(url="/login")
 
 
-@app.get("/top", response_class=HTMLResponse)
-async def top(request: Request, user_info: Dict[str, Any] = Depends(get_current_user)) -> HTMLResponse:
-    """トップページ表示 (認証必須)"""
-    context = {"request": request, "user": user_info, "settings": load_settings()}
+# 公開ページ化のため認証を外す
+async def top(request: Request) -> HTMLResponse:
+    """トップページ表示 (公開)"""
+    context = {"request": request, "settings": load_settings()}
     return templates.TemplateResponse("top.html", context)
 
 
@@ -209,6 +219,34 @@ async def top(request: Request, user_info: Dict[str, Any] = Depends(get_current_
 async def login(request: Request):
     """ログインページ表示"""
     return templates.TemplateResponse("login.html", {"request": request})
+
+
+# ------------------------------------------------------------
+# 認証 API
+# ------------------------------------------------------------
+
+class LoginPayload(BaseModel):
+    idToken: str
+
+
+@app.post("/api/login", response_class=JSONResponse)
+async def login_api(payload: LoginPayload):
+    """Firebase ID トークンを受け取り Cookie に保存してログイン完了とする"""
+    user_info = verify_firebase_token(payload.idToken)
+    if not user_info:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    response = JSONResponse({"status": "success", "message": "Logged in", "email": user_info.get("email")})
+    # Cookie に保存 (Secure/HTTPOnly)
+    response.set_cookie(
+        key="idToken",
+        value=payload.idToken,
+        max_age=60 * 60 * 24,  # 1 day
+        httponly=True,
+        secure=True,
+        samesite="Lax",
+    )
+    return response
 
 
 # ------------------------------------------------------------
@@ -433,6 +471,17 @@ async def chromedriver_error(request: Request, message: str = "ChromeDriver erro
     return templates.TemplateResponse("error.html", context)
 
 app.include_router(get_router(), prefix="/api")
+
+origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+origins = [o.strip().strip('"') for o in origins_env.split(",")]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 async def get_firebase_app():
     """Firebase アプリを初期化して返す"""

@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl wget gnupg \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 \
+    libxfixes3 libxkbcommon0 libdrm2 \
     libxrandr2 libxi6 libasound2 libpangocairo-1.0-0 \
     libatk1.0-0 libatk-bridge2.0-0 libgbm1 libgtk-3-0 \
     ca-certificates fonts-liberation libappindicator3-1 xdg-utils \
@@ -47,6 +48,9 @@ EXPOSE 8080
 
 # シークレットマウント用ディレクトリ作成
 RUN mkdir -p /secrets
+
+# アプリログディレクトリ作成 (updater.py が期待)
+RUN mkdir -p /app/logs
 
 # データディレクトリ作成（クローリングデータ、ログ、ドライバー）
 RUN mkdir -p "$APP_DATA_DIR/crawled_data" "$APP_DATA_DIR/logs" "$APP_DATA_DIR/drivers"

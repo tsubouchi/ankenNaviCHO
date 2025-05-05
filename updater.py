@@ -480,4 +480,34 @@ def perform_update():
 
 # ステータスの取得
 def get_update_status():
-    return updater.get_status() 
+    return updater.get_status()
+
+# ------------------------------------------------------------
+# 互換性プレースホルダ (main.py からインポートされる関数)
+# ------------------------------------------------------------
+
+_update_thread = None  # type: ignore
+
+def start_background_update():
+    """バックグラウンドで定期的に update チェックを回すプレースホルダ。Cloud Run では未使用。"""
+    import threading, time
+    global _update_thread
+    if _update_thread and _update_thread.is_alive():
+        return  # すでに起動済み
+
+    def _loop():
+        while True:
+            try:
+                check_for_updates()
+            except Exception as exc:  # pragma: no cover
+                logger.warning("background update check failed: %s", exc)
+            time.sleep(3600)  # 1 時間おき
+
+    _update_thread = threading.Thread(target=_loop, daemon=True)
+    _update_thread.start()
+
+
+def stop_background_update():
+    """バックグラウンドスレッドを停止 (簡易版)"""
+    global _update_thread
+    _update_thread = None 

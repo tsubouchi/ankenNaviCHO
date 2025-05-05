@@ -1,11 +1,11 @@
 steps:
   # 1. Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest', '.']
+    args: ['build', '-t', 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest', '.']
 
   # 2. Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest']
+    args: ['push', 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest']
 
   # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -14,22 +14,32 @@ steps:
       - 'run'
       - 'deploy'
       - 'anken-navi'
-      - '--image=asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest'
+      - '--image=asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest'
       - '--region=asia-northeast1'
       - '--platform=managed'
       - '--memory=1Gi'
       - '--cpu=1'
       - '--max-instances=2'
       - '--concurrency=80'
-      - '--allow-unauthenticated'
       - '--port=8080'
-      - '--set-env-vars=SKIP_NODE_SERVER=true,FASTAPI_ENV=production,APP_DATA_DIR=/tmp/app-data,SKIP_CHROME_SETUP=true,SKIP_UPDATES=true'
+      - '--set-env-vars=SKIP_NODE_SERVER=true,FASTAPI_ENV=production,APP_DATA_DIR=/tmp/app-data,SKIP_CHROME_SETUP=true,SKIP_UPDATES=true,ALLOWED_ORIGINS="*",UVICORN_TIMEOUT_KEEP_ALIVE=75'
       - '--update-secrets=FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest'
-      - '--timeout=5m'
+      - '--timeout=10m'
       - '--min-instances=0'
       - '--execution-environment=gen2'
       - '--ingress=all'
-      - '--vpc-egress=all'
+
+  # 4. (Optional) Grant public access after successful deploy
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'add-iam-policy-binding'
+      - 'anken-navi'
+      - '--region=asia-northeast1'
+      - '--member=allUsers'
+      - '--role=roles/run.invoker'
 
 images:
-  - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/anken-docker-repo/anken-navi:latest' 
+  - 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest' 
