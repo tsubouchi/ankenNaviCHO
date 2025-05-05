@@ -482,11 +482,11 @@ async def bulk_apply_endpoint(request: Request, background_tasks: BackgroundTask
     urls = data.get("urls", []) if isinstance(data, dict) else []
     if not urls:
         raise HTTPException(status_code=400, detail="urls is required")
-
+            
     # URL形式チェック
     if any(not url.startswith("http") for url in urls):
         raise HTTPException(status_code=400, detail="Invalid URL in list")
-
+            
     # スレッドで開始
     background_tasks.add_task(bulk_apply_process, urls)
     logger.info("Bulk apply process started: %s urls", len(urls))
@@ -504,6 +504,7 @@ async def bulk_apply_progress_endpoint():
                     if progress.get("completed"):
                         break
                 except Exception:
+                    # タイムアウトもしくはキューが空
                     yield "data: {\"status\":\"timeout\"}\n\n"
                     break
         except Exception as exc:
