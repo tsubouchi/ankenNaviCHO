@@ -209,6 +209,7 @@ async def index() -> RedirectResponse:
 
 
 # 公開ページ化のため認証を外す
+@app.get("/top", response_class=HTMLResponse)
 async def top(request: Request) -> HTMLResponse:
     """トップページ表示 (公開)"""
     context = {"request": request, "settings": load_settings()}
