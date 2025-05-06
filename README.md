@@ -215,3 +215,33 @@ pytest -q
 ```
 
 `tests/test_health.py` では `/health` エンドポイントが 200 かつ `{"status": "ok"}` を返すことを確認しています。
+
+## API エンドポイント一覧
+
+| メソッド | パス | 認証 | 説明 |
+|---------|------|------|------|
+| GET | `/health` | なし | ヘルスチェック (200: OK) |
+| GET | `/` | なし | `/login` へリダイレクト |
+| GET | `/top` | なし | 公開トップページ |
+| GET | `/login` | なし | ログインページ (Google/Firebase) |
+| POST | `/api/login` | なし | ID トークン受取 → Cookie 保存 |
+| POST | `/api/update_settings` | 必要 | 各種設定更新 |
+| POST | `/api/check_auth` | 必要 | サービス認証情報の有無確認 |
+| POST | `/api/fetch_new_data` | 必要 | クローリング実行＆最新データ取得 |
+| GET | `/api/job_history/files` | 必要 | 保存済みジョブファイル一覧 |
+| GET | `/api/job_history/content?file=` | 必要 | 指定ファイル内容取得 |
+| POST | `/api/job_history/clear` | 必要 | ジョブ履歴削除（単体/全て） |
+| POST | `/api/clear_old_data` | 必要 | 古いジョブデータ一括削除 |
+| GET | `/api/get_checks` | 必要 | チェック状態一覧取得 |
+| POST | `/api/update_check` | 必要 | チェック状態更新 |
+| POST | `/api/check_updates` | 必要 | アプリ更新有無チェック |
+| POST | `/api/perform_update` | 必要 | アプリ自己更新実行 |
+| GET | `/api/update_status` | 必要 | 更新ステータス取得 |
+| GET | `/api/chromedriver/status` | なし | ChromeDriver 状態取得 |
+| POST | `/api/chromedriver/update` | なし | ChromeDriver 更新 |
+| POST | `/api/bulk_apply` | 必要 | 一括応募開始 (bulk_apply.py) |
+| GET | `/api/bulk_apply_progress` | 必要 | 一括応募進捗 SSE |
+| GET | `/chromedriver_error` | なし | ChromeDriver エラー表示 |
+| GET | `/api/placeholder` | 必要 | プレースホルダ API |
+
+> **認証が必要** なエンドポイントは Firebase ID トークンを `Authorization: Bearer <token>`<br>または `cookie: idToken=<token>` として送信してください。

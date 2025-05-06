@@ -1,3 +1,7 @@
+serviceAccount: projects/anken-navicho/serviceAccounts/267332925025-compute@developer.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   # 1. Build the container image
   - name: 'gcr.io/cloud-builders/docker'

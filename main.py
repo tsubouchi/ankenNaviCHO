@@ -146,3 +146,13 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # csrf_token 未使用でもテンプレエラー回避
 templates.env.globals["csrf_token"] = lambda: ""
+
+# ---------------------------------
+# 公開トップページ
+# ---------------------------------
+
+@app.get("/top", response_class=HTMLResponse)
+async def top(request: Request) -> HTMLResponse:
+    """トップページ (公開)"""
+    context = {"request": request, "settings": load_settings()}
+    return templates.TemplateResponse("top.html", context)
