@@ -144,4 +144,5 @@ app = FastAPI(
 # static / templates マウント
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-# csrf_token 未使用でもテンプレ
+# csrf_token 未使用でもテンプレエラー回避
+templates.env.globals["csrf_token"] = lambda: ""
