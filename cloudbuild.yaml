@@ -28,6 +28,7 @@ steps:
       - '--min-instances=0'
       - '--execution-environment=gen2'
       - '--ingress=all'
+      - '--project=anken-navicho'
 
   # 4. (Optional) Grant public access after successful deploy
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -40,6 +41,7 @@ steps:
       - '--region=asia-northeast1'
       - '--member=allUsers'
       - '--role=roles/run.invoker'
+      - '--project=anken-navicho'
 
 images:
   - 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest' 

@@ -480,7 +480,7 @@ def perform_update():
 
 # ステータスの取得
 def get_update_status():
-    return updater.get_status()
+    return updater.get_status() 
 
 # ------------------------------------------------------------
 # 互換性プレースホルダ (main.py からインポートされる関数)

@@ -420,7 +420,7 @@ def start_background_update():
 
 def stop_background_update():
     """バックグラウンド更新を停止"""
-    get_instance().stop_background_update()
+    get_instance().stop_background_update() 
 
 def get_selenium_options():
     """Seleniumのオプションを設定"""

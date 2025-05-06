@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-
+ 
 # ルートディレクトリを PYTHONPATH に追加
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:

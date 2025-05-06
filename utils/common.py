@@ -171,7 +171,7 @@ def verify_firebase_token(id_token: str):
         return decoded  # dict 形式
     except Exception as exc:
         logger.warning("Firebase トークン検証失敗: %s", exc)
-        return None
+        return None 
 
 
 # ------------------------------------------------------------
