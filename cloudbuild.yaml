@@ -2,10 +2,21 @@ steps:
   # 1. Build the container image
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest', '.']
+    secretEnv:
+      - OPENAI_API_KEY
 
   # 2. Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest']
+
+  # 2.5. Use secret to verify access (dummy step)
+  - name: 'alpine'
+    entrypoint: 'sh'
+    secretEnv:
+      - OPENAI_API_KEY
+    args:
+      - '-c'
+      - 'echo "Using secret key: ${OPENAI_API_KEY:0:4}***"'
 
   # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -44,4 +55,9 @@ steps:
       - '--project=anken-navicho'
 
 images:
-  - 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest' 
+  - 'asia-northeast1-docker.pkg.dev/anken-navicho/anken-docker-repo/anken-navi:latest'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/anken-navicho/secrets/OPENAI_API_KEY/versions/latest
+      env: OPENAI_API_KEY 
