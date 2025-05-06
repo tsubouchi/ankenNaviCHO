@@ -90,10 +90,27 @@
         {% endwith %}
 
         <!-- Googleログインボタン -->
-        <button id="signin" class="login-btn">
+        <button id="signin-google" class="login-btn mb-3">
             <img src="https://www.google.com/favicon.ico" alt="Google" class="google-icon">
             Googleでログイン
         </button>
+
+        <!-- or separator -->
+        <div class="text-center text-muted my-2">または</div>
+
+        <!-- メール / パスワード ログインフォーム -->
+        <form id="email-login-form">
+            <div class="form-group">
+                <input type="email" id="email" class="form-control" placeholder="メールアドレス" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" class="form-control" placeholder="パスワード" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">メールでログイン</button>
+            <small class="form-text text-muted text-right mt-1">
+              アカウントが無い場合は <a href="#" id="signup-link">新規登録</a>
+            </small>
+        </form>
     </div>
 </div>
 
@@ -116,36 +133,55 @@
     const provider = new GoogleAuthProvider();
 
     // ログインボタンのクリックイベント
-    document.getElementById('signin').addEventListener('click', async () => {
+    document.getElementById('signin-google').addEventListener('click', async () => {
         try {
-            // Google認証ポップアップを表示
             const result = await signInWithPopup(auth, provider);
-            
-            // 認証成功後、IDトークンを取得
             const idToken = await result.user.getIdToken();
-            
-            // IDトークンをサーバーに送信
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ idToken })
-            });
-            
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                // 認証成功 - トップページへリダイレクト
-                window.location.href = '/top';
-            } else {
-                // エラーメッセージを表示
-                alert('ログインエラー: ' + data.message);
-            }
+            await postIdToken(idToken);
         } catch (error) {
             console.error('Firebase認証エラー:', error);
-            alert('ログインに失敗しました。もう一度お試しください。');
+            alert('Googleログインに失敗しました。');
         }
     });
+
+    // -------- メール / パスワード ログイン --------
+    document.getElementById('email-login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        try {
+            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+
+            const userCredential = await signInWithEmailAndPassword(auth, email, password).catch(async (err) => {
+                if (err.code === 'auth/user-not-found') {
+                    // ユーザが存在しなければ自動で新規登録
+                    return await createUserWithEmailAndPassword(auth, email, password);
+                }
+                throw err;
+            });
+
+            const idToken = await userCredential.user.getIdToken();
+            await postIdToken(idToken);
+        } catch (error) {
+            console.error('メールログインエラー:', error);
+            alert('メール/パスワードでのログインに失敗しました。');
+        }
+    });
+
+    // -------- IDトークンをサーバへ送信 --------
+    async function postIdToken(idToken) {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            window.location.href = '/top';
+        } else {
+            alert('ログインエラー: ' + data.message);
+        }
+    }
 </script>
 {% endblock %}
