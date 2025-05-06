@@ -141,6 +141,21 @@ app = FastAPI(
     lifespan=lifespan,  # LifeSpan管理を接続
 )
 
+# ------------------------------------------------------------
+# CORS ミドルウェア設定
+# ------------------------------------------------------------
+# 環境変数 CORS_ALLOW_ORIGINS="https://foo.com,https://bar.com" のように指定可能
+_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "*")
+allow_origins = [o.strip() for o in _origins_raw.split(",") if o.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,  # ["*"] なら全許可
+    allow_credentials=True,       # Cookie 送信許可
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 # static / templates マウント
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -156,3 +171,56 @@ async def top(request: Request) -> HTMLResponse:
     """トップページ (公開)"""
     context = {"request": request, "settings": load_settings()}
     return templates.TemplateResponse("top.html", context)
+
+@app.get("/login", response_class=HTMLResponse, include_in_schema=False)
+async def login_page(request: Request) -> HTMLResponse:
+    """ログインページ (公開)"""
+    context = {"request": request}
+    return templates.TemplateResponse("login.html", context)
+
+@app.get("/health", include_in_schema=False)
+async def health_check() -> Dict[str, str]:
+    """Cloud Run 用ヘルスチェック (公開)"""
+    return {"status": "ok"}
+
+# ---------------------------------
+# ルート / → /top へリダイレクト
+# ---------------------------------
+@app.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/top", status_code=302)
+
+# ---------------------------------
+# 認証ミドルウェア（HTMLページ用）
+# ---------------------------------
+@app.middleware("http")
+async def auth_redirect_middleware(request: Request, call_next):
+    """未ログインユーザーが保護ページにアクセスした場合 /login へリダイレクト
+
+    API エンドポイント（/api/**）や静的ファイル、公開ページは対象外。
+    """
+    public_paths = {"/", "/top", "/login", "/health"}
+    path = request.url.path
+
+    # 静的ファイル・API はスルー
+    if path.startswith("/static") or path.startswith("/api"):
+        return await call_next(request)
+
+    # 公開ページはスルー
+    if path in public_paths:
+        return await call_next(request)
+
+    # Cookie から idToken を取得
+    id_token: str | None = request.cookies.get("idToken")
+    if not id_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    # Firebase 検証
+    user = verify_firebase_token(id_token)
+    if not user:
+        # 不正トークン→ログインページへ
+        return RedirectResponse(url="/login", status_code=302)
+
+    # 正常なら続行
+    response = await call_next(request)
+    return response
