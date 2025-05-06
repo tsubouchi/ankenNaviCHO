@@ -15,64 +15,58 @@ def is_frozen() -> bool:
 
 # アプリケーションパスの初期化
 def get_app_paths():
-    """アプリケーションの各種パスを取得"""
-    # まず APP_DATA_DIR が設定されていればそれを最優先
+    """アプリケーションの各種パスを取得
+
+    優先順位:
+    1. 環境変数 APP_DATA_DIR
+    2. frozen バイナリ（PyInstaller / py2app）
+    3. 開発環境（ソースコード実行）
+    """
+    # 1. 環境変数があれば最優先
     env_data_dir = os.environ.get("APP_DATA_DIR")
     if env_data_dir:
         data_dir = Path(env_data_dir)
         ensure_app_directories(data_dir)
-        settings_file = data_dir / 'crawled_data' / 'settings.json'
-        # 実行ファイルの所在は bundle_dir で代替
+        settings_file = data_dir / "crawled_data" / "settings.json"
+        # 実行ファイルの所在はカレントディレクトリで代替
         bundle_dir = Path(os.getcwd())
         return {
-            'bundle_dir': bundle_dir,
-            'data_dir': data_dir,
-            'settings_file': settings_file,
+            "bundle_dir": bundle_dir,
+            "data_dir": data_dir,
+            "settings_file": settings_file,
         }
-    else:
-        # 実行環境がfrozenか（.appとして実行されているか）確認
-        if is_frozen():
-            # .appとして実行されている場合
-            if hasattr(sys, '_MEIPASS'):
-                # PyInstallerの場合
-                bundle_dir = Path(sys._MEIPASS)
-            else:
-                # py2appの場合
-                bundle_dir = Path(os.path.dirname(os.path.dirname(sys.executable))) / 'Resources'
-            
-            # データディレクトリを設定（ユーザーのホームディレクトリ内）
-            app_data_dir = Path(os.path.expanduser('~/Library/Application Support/ankenNaviCHO'))
-            
-            # 必要なディレクトリを作成
-            ensure_app_directories(app_data_dir)
-            
-            # 設定ファイルのパス
-            settings_file = app_data_dir / 'crawled_data' / 'settings.json'
-            
-            return {
-                'bundle_dir': bundle_dir,
-                'data_dir': app_data_dir,
-                'settings_file': settings_file
-            }
+
+    # 2. frozen バイナリとして実行（.app / .exe など）
+    if is_frozen():
+        if hasattr(sys, "_MEIPASS"):
+            # PyInstaller
+            bundle_dir = Path(sys._MEIPASS)  # type: ignore[attr-defined]
         else:
-            # 開発環境で実行されている場合
-            bundle_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-            
-            # 開発環境ではルートディレクトリを基準としてパスを設定
-            project_root = bundle_dir
-            data_dir = project_root  # ルートディレクトリをデータディレクトリとして使用
-            
-            # 必要なディレクトリを作成（開発環境では特別な処理）
-            ensure_dev_directories(project_root)
-            
-            # 設定ファイルのパス（crawled_dataディレクトリ内）
-            settings_file = project_root / 'crawled_data' / 'settings.json'
-            
-            return {
-                'bundle_dir': bundle_dir,
-                'data_dir': data_dir,
-                'settings_file': settings_file
-            }
+            # py2app 等（Resources 配下）
+            bundle_dir = Path(os.path.dirname(os.path.dirname(sys.executable))) / "Resources"
+
+        # ユーザーディレクトリ配下にアプリ用フォルダを確保
+        app_data_dir = Path(os.path.expanduser("~/Library/Application Support/ankenNaviCHO"))
+        ensure_app_directories(app_data_dir)
+        settings_file = app_data_dir / "crawled_data" / "settings.json"
+        return {
+            "bundle_dir": bundle_dir,
+            "data_dir": app_data_dir,
+            "settings_file": settings_file,
+        }
+
+    # 3. 上記いずれでもない＝開発環境
+    bundle_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    project_root = bundle_dir  # ルートディレクトリをデータディレクトリとして使用
+    data_dir = project_root
+
+    ensure_dev_directories(project_root)
+    settings_file = project_root / "crawled_data" / "settings.json"
+    return {
+        "bundle_dir": bundle_dir,
+        "data_dir": data_dir,
+        "settings_file": settings_file,
+    }
 
 # 環境変数からデータディレクトリを取得する関数
 def get_data_dir_from_env():
